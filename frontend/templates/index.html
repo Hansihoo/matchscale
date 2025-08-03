@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}MatchScale - 이상형 입력{% endblock %}
+
+{% block content %}
+<div class="ideal-type-form">
+    <h2>나의 이상형 조건 입력</h2>
+    <p class="form-description">
+        원하는 이상형의 조건을 입력하면 매칭 확률을 계산해드립니다.
+    </p>
+
+    <form id="idealTypeForm" class="form">
+        <!-- 나이 범위 -->
+        <div class="form-group">
+            <label for="ageMin">나이 범위</label>
+            <div class="age-range">
+                <input type="number" id="ageMin" name="age_min" min="18" max="100" placeholder="최소" required>
+                <span>~</span>
+                <input type="number" id="ageMax" name="age_max" min="18" max="100" placeholder="최대" required>
+            </div>
+        </div>
+
+        <!-- 지역 -->
+        <div class="form-group">
+            <label for="location">지역</label>
+            <select id="location" name="location" required>
+                <option value="">지역을 선택하세요</option>
+                <option value="seoul">서울</option>
+                <option value="busan">부산</option>
+                <option value="daegu">대구</option>
+                <option value="incheon">인천</option>
+                <option value="gwangju">광주</option>
+                <option value="daejeon">대전</option>
+                <option value="ulsan">울산</option>
+                <option value="sejong">세종</option>
+                <option value="gyeonggi">경기도</option>
+                <option value="gangwon">강원도</option>
+                <option value="chungbuk">충청북도</option>
+                <option value="chungnam">충청남도</option>
+                <option value="jeonbuk">전라북도</option>
+                <option value="jeonnam">전라남도</option>
+                <option value="gyeongbuk">경상북도</option>
+                <option value="gyeongnam">경상남도</option>
+                <option value="jeju">제주도</option>
+            </select>
+        </div>
+
+        <!-- 관심사 -->
+        <div class="form-group">
+            <label for="interests">관심사 (최대 5개)</label>
+            <div class="interests-container">
+                <div class="interest-tags">
+                    <span class="tag" data-value="travel">여행</span>
+                    <span class="tag" data-value="music">음악</span>
+                    <span class="tag" data-value="sports">운동</span>
+                    <span class="tag" data-value="cooking">요리</span>
+                    <span class="tag" data-value="reading">독서</span>
+                    <span class="tag" data-value="gaming">게임</span>
+                    <span class="tag" data-value="art">예술</span>
+                    <span class="tag" data-value="technology">기술</span>
+                    <span class="tag" data-value="fashion">패션</span>
+                    <span class="tag" data-value="food">음식</span>
+                </div>
+                <input type="hidden" id="selectedInterests" name="interests">
+            </div>
+        </div>
+
+        <!-- 스타일 -->
+        <div class="form-group">
+            <label for="style">선호하는 스타일</label>
+            <select id="style" name="style">
+                <option value="">스타일을 선택하세요</option>
+                <option value="cute">귀여운</option>
+                <option value="elegant">우아한</option>
+                <option value="casual">캐주얼</option>
+                <option value="sporty">스포티</option>
+                <option value="classic">클래식</option>
+            </select>
+        </div>
+
+        <!-- 키 -->
+        <div class="form-group">
+            <label for="height">선호하는 키</label>
+            <select id="height" name="height">
+                <option value="">키를 선택하세요</option>
+                <option value="150-160">150-160cm</option>
+                <option value="160-170">160-170cm</option>
+                <option value="170-180">170-180cm</option>
+                <option value="180-190">180-190cm</option>
+                <option value="190+">190cm 이상</option>
+            </select>
+        </div>
+
+        <!-- 제출 버튼 -->
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary">확률 계산하기</button>
+        </div>
+    </form>
+
+    <!-- 결과 표시 영역 -->
+    <div id="resultContainer" class="result-container" style="display: none;">
+        <h3>매칭 확률 결과</h3>
+        <div id="resultContent"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // 폼 제출 이벤트 처리
+    document.getElementById('idealTypeForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // 폼 데이터 수집
+        const formData = {
+            age_range: [
+                parseInt(document.getElementById('ageMin').value),
+                parseInt(document.getElementById('ageMax').value)
+            ],
+            location: document.getElementById('location').value,
+            interests: getSelectedInterests(),
+            style: document.getElementById('style').value,
+            height: document.getElementById('height').value
+        };
+        
+        // API 호출
+        submitIdealTypeData(formData);
+    });
+    
+    // 관심사 태그 선택 처리
+    document.querySelectorAll('.interest-tag').forEach(tag => {
+        tag.addEventListener('click', function() {
+            this.classList.toggle('selected');
+            updateSelectedInterests();
+        });
+    });
+    
+    function getSelectedInterests() {
+        const selectedTags = document.querySelectorAll('.interest-tag.selected');
+        return Array.from(selectedTags).map(tag => tag.dataset.value);
+    }
+    
+    function updateSelectedInterests() {
+        const interests = getSelectedInterests();
+        document.getElementById('selectedInterests').value = JSON.stringify(interests);
+    }
+</script>
+{% endblock %} 
