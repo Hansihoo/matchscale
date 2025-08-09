@@ -1,148 +1,767 @@
 {% extends "base.html" %}
 
-{% block title %}MatchScale - 이상형 입력{% endblock %}
+{% block title %}이상형 선택률 계산기 - 당신이 원하는 이성은 몇 %일까?{% endblock %}
 
 {% block content %}
-<div class="ideal-type-form">
-    <h2>나의 이상형 조건 입력</h2>
-    <p class="form-description">
-        원하는 이상형의 조건을 입력하면 매칭 확률을 계산해드립니다.
-    </p>
+<div class="hero-section">
+    <h1 class="hero-title">이상형 선택률 계산기</h1>
+    <p class="hero-subtitle">당신이 원하는 이상형이 전체 이성 중 몇 %일까요?<br>실제 통계로 정확히 계산해드립니다!</p>
+</div>
 
-    <form id="idealTypeForm" class="form">
-        <!-- 나이 범위 -->
-        <div class="form-group">
-            <label for="ageMin">나이 범위</label>
-            <div class="age-range">
-                <input type="number" id="ageMin" name="age_min" min="18" max="100" placeholder="최소" required>
-                <span>~</span>
-                <input type="number" id="ageMax" name="age_max" min="18" max="100" placeholder="최대" required>
+<div class="main-content">
+    <!-- 조건 입력 폼 -->
+    <div class="form-section">
+        <h2>이상형 조건 입력</h2>
+        <p class="form-description">원하는 이상형의 조건을 선택해보세요. 선택하지 않으면 해당 조건은 제외됩니다.</p>
+        
+        <form id="idealTypeForm" class="ideal-type-form" data-managed="inline">
+            <!-- 성별 선택 -->
+            <div class="form-group">
+                <label for="gender">이상형 성별 *</label>
+                <select id="gender" name="gender" required>
+                    <option value="">성별을 선택하세요</option>
+                    <option value="남성">남성</option>
+                    <option value="여성">여성</option>
+                </select>
+                <small class="form-text">* 필수 선택 항목입니다</small>
             </div>
-        </div>
 
-        <!-- 지역 -->
-        <div class="form-group">
-            <label for="location">지역</label>
-            <select id="location" name="location" required>
-                <option value="">지역을 선택하세요</option>
-                <option value="seoul">서울</option>
-                <option value="busan">부산</option>
-                <option value="daegu">대구</option>
-                <option value="incheon">인천</option>
-                <option value="gwangju">광주</option>
-                <option value="daejeon">대전</option>
-                <option value="ulsan">울산</option>
-                <option value="sejong">세종</option>
-                <option value="gyeonggi">경기도</option>
-                <option value="gangwon">강원도</option>
-                <option value="chungbuk">충청북도</option>
-                <option value="chungnam">충청남도</option>
-                <option value="jeonbuk">전라북도</option>
-                <option value="jeonnam">전라남도</option>
-                <option value="gyeongbuk">경상북도</option>
-                <option value="gyeongnam">경상남도</option>
-                <option value="jeju">제주도</option>
-            </select>
-        </div>
-
-        <!-- 관심사 -->
-        <div class="form-group">
-            <label for="interests">관심사 (최대 5개)</label>
-            <div class="interests-container">
-                <div class="interest-tags">
-                    <span class="tag" data-value="travel">여행</span>
-                    <span class="tag" data-value="music">음악</span>
-                    <span class="tag" data-value="sports">운동</span>
-                    <span class="tag" data-value="cooking">요리</span>
-                    <span class="tag" data-value="reading">독서</span>
-                    <span class="tag" data-value="gaming">게임</span>
-                    <span class="tag" data-value="art">예술</span>
-                    <span class="tag" data-value="technology">기술</span>
-                    <span class="tag" data-value="fashion">패션</span>
-                    <span class="tag" data-value="food">음식</span>
+            <!-- 키 조건 (듀얼 슬라이더 + 상관없음) -->
+            <div class="form-group">
+                <label>키 (cm)
+                    <label class="any-toggle"><input type="checkbox" id="heightAny"> 상관없음</label>
+                </label>
+                <div class="range-row" id="heightControls">
+                    <input type="number" id="heightMin" min="140" max="200" step="1" placeholder="최소" value="165">
+                    <div id="heightSlider" class="nu-slider"></div>
+                    <input type="number" id="heightMax" min="140" max="200" step="1" placeholder="최대" value="175">
                 </div>
-                <input type="hidden" id="selectedInterests" name="interests">
+                <small class="form-text" id="heightHint">선택: 165–175cm</small>
             </div>
-        </div>
 
-        <!-- 스타일 -->
-        <div class="form-group">
-            <label for="style">선호하는 스타일</label>
-            <select id="style" name="style">
-                <option value="">스타일을 선택하세요</option>
-                <option value="cute">귀여운</option>
-                <option value="elegant">우아한</option>
-                <option value="casual">캐주얼</option>
-                <option value="sporty">스포티</option>
-                <option value="classic">클래식</option>
-            </select>
-        </div>
+            <!-- 학력 조건 (칩/다중선택) -->
+            <div class="form-group">
+                <label>학력
+                    <label class="any-toggle"><input type="checkbox" id="educationAny"> 상관없음</label>
+                </label>
+                <div class="chip-group" id="educationChips">
+                    <label class="chip"><input type="checkbox" name="education_levels" value="SKY"><span>SKY</span></label>
+                    <label class="chip"><input type="checkbox" name="education_levels" value="인서울"><span>인서울</span></label>
+                    <label class="chip"><input type="checkbox" name="education_levels" value="지거국"><span>지거국</span></label>
+                    <label class="chip"><input type="checkbox" name="education_levels" value="4년제"><span>4년제</span></label>
+                    <label class="chip"><input type="checkbox" name="education_levels" value="이하"><span title="전문대(전문학사), 고졸, 검정고시 등 4년제 미만">전문대/고졸 이하</span></label>
+                </div>
+                <small class="form-text">여러 개 선택 가능. 아무 것도 선택하지 않으면 상관없음으로 처리</small>
+                <small class="form-text">‘전문대/고졸 이하’는 전문대(2–3년제·전문학사), 고졸, 검정고시 등 4년제 미만을 포함합니다.</small>
+            </div>
 
-        <!-- 키 -->
-        <div class="form-group">
-            <label for="height">선호하는 키</label>
-            <select id="height" name="height">
-                <option value="">키를 선택하세요</option>
-                <option value="150-160">150-160cm</option>
-                <option value="160-170">160-170cm</option>
-                <option value="170-180">170-180cm</option>
-                <option value="180-190">180-190cm</option>
-                <option value="190+">190cm 이상</option>
-            </select>
-        </div>
+            <!-- 연봉 조건 (듀얼 슬라이더 + 이상/이하 + 상관없음) -->
+            <div class="form-group">
+                <label>연봉 (만원/년)
+                    <label class="any-toggle"><input type="checkbox" id="salaryAny"> 상관없음</label>
+                </label>
+                <div class="range-row" id="salaryControls">
+                    <input type="number" id="salaryMin" min="0" max="10000" step="100" placeholder="최소" value="3000">
+                    <div id="salarySlider" class="nu-slider"></div>
+                    <input type="number" id="salaryMax" min="0" max="10000" step="100" placeholder="최대" value="5000">
+                </div>
+                <small class="form-text" id="salaryHint">선택: 3000–5000만원</small>
+            </div>
 
-        <!-- 제출 버튼 -->
-        <div class="form-group">
-            <button type="submit" class="btn btn-primary">확률 계산하기</button>
+            <!-- 직업 조건 (카테고리 체크박스/다중선택) -->
+            <div class="form-group">
+                <label>직업
+                    <label class="any-toggle"><input type="checkbox" id="occupationsAny" checked> 상관없음</label>
+                </label>
+                <div class="checkbox-grid" id="occupationsGrid">
+                    <label class="check-chip"><input type="checkbox" name="occupations" value="전문직"> 전문직</label>
+                    <label class="check-chip"><input type="checkbox" name="occupations" value="공무원"> 공무원</label>
+                    <label class="check-chip"><input type="checkbox" name="occupations" value="공기업"> 공기업</label>
+                    <label class="check-chip"><input type="checkbox" name="occupations" value="그 외"> 그 외</label>
+                </div>
+                <small class="form-text">여러 개 선택 가능. 아무 것도 선택하지 않으면 상관없음으로 처리</small>
+            </div>
+
+            <!-- 지역 조건 (시·도 다중 선택 + 프리셋) -->
+            <div class="form-group">
+                <label>지역
+                    <label class="any-toggle"><input type="checkbox" id="regionsAny"> 상관없음</label>
+                </label>
+                <div class="chip-group" id="regionsChips">
+                    <label class="chip"><input type="checkbox" name="regions" value="서울특별시" checked><span>서울특별시</span></label>
+                    <label class="chip"><input type="checkbox" name="regions" value="부산광역시"><span>부산광역시</span></label>
+                    <label class="chip"><input type="checkbox" name="regions" value="대구광역시"><span>대구광역시</span></label>
+                    <label class="chip"><input type="checkbox" name="regions" value="인천광역시"><span>인천광역시</span></label>
+                    <label class="chip"><input type="checkbox" name="regions" value="광주광역시"><span>광주광역시</span></label>
+                    <label class="chip"><input type="checkbox" name="regions" value="대전광역시"><span>대전광역시</span></label>
+                    <label class="chip"><input type="checkbox" name="regions" value="울산광역시"><span>울산광역시</span></label>
+                    <label class="chip"><input type="checkbox" name="regions" value="세종특별자치시"><span>세종특별자치시</span></label>
+                    <label class="chip"><input type="checkbox" name="regions" value="경기도"><span>경기도</span></label>
+                    <label class="chip"><input type="checkbox" name="regions" value="강원특별자치도"><span>강원특별자치도</span></label>
+                    <label class="chip"><input type="checkbox" name="regions" value="충청북도"><span>충청북도</span></label>
+                    <label class="chip"><input type="checkbox" name="regions" value="충청남도"><span>충청남도</span></label>
+                    <label class="chip"><input type="checkbox" name="regions" value="전북특별자치도"><span>전북특별자치도</span></label>
+                    <label class="chip"><input type="checkbox" name="regions" value="전라남도"><span>전라남도</span></label>
+                    <label class="chip"><input type="checkbox" name="regions" value="경상북도"><span>경상북도</span></label>
+                    <label class="chip"><input type="checkbox" name="regions" value="경상남도"><span>경상남도</span></label>
+                    <label class="chip"><input type="checkbox" name="regions" value="제주특별자치도"><span>제주특별자치도</span></label>
+                </div>
+                <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                    <button type="button" class="submit-btn" style="padding:0.4rem 0.9rem; font-size:0.9rem;" onclick="presetRegions('metro')">
+                        수도권 <span id="metroState" class="group-badge">0/3</span>
+                    </button>
+                    <button type="button" class="submit-btn" style="padding:0.4rem 0.9rem; font-size:0.9rem; background:#6c63ff;" onclick="presetRegions('big')">
+                        지방광역시 <span id="bigState" class="group-badge">0/5</span>
+                    </button>
+                    <button type="button" class="submit-btn" style="padding:0.4rem 0.9rem; font-size:0.9rem; background:#888;" onclick="presetRegions('clear')">전체 해제</button>
+                </div>
+            </div>
+
+            <!-- 나이 조건 (듀얼 슬라이더 + 상관없음) -->
+            <div class="form-group">
+                <label>나이 (세)
+                    <label class="any-toggle"><input type="checkbox" id="ageAny"> 상관없음</label>
+                </label>
+                <div class="range-row" id="ageControls">
+                    <input type="number" id="ageMin" name="ageMin" min="18" max="100" placeholder="최소" value="25">
+                    <div id="ageSlider" class="nu-slider"></div>
+                    <input type="number" id="ageMax" name="ageMax" min="18" max="100" placeholder="최대" value="34">
+                </div>
+                <small class="form-text" id="ageHint">선택: 25–34세</small>
+            </div>
+
+            <!-- 흡연 여부 체크박스 -->
+            <div class="form-group checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="smoking" name="smoking" value="비흡연">
+                    <span class="checkmark"></span>
+                    비흡연자만 원함
+                </label>
+                <small class="form-text">체크하면 성별 흡연율이 자동으로 적용됩니다</small>
+            </div>
+
+            <!-- 외모 조건 (상위 퍼센트 범위: 듀얼 슬라이더) -->
+            <div class="form-group">
+                <label>외모 상위 퍼센트(%)
+                    <label class="any-toggle"><input type="checkbox" id="appearanceAny" checked> 상관없음</label>
+                </label>
+                <div class="range-row" id="appearanceControls">
+                    <input type="number" id="appearanceMin" min="0" max="100" step="1" value="0" disabled>
+                    <div id="appearanceSlider" class="nu-slider"></div>
+                    <input type="number" id="appearanceMax" min="1" max="100" step="1" value="20" disabled>
+                </div>
+                <small class="form-text" id="appearanceHint">선택: 상관없음 (선택 시 상위 A–B% 구간을 의미)</small>
+            </div>
+
+            <!-- 제출 버튼 -->
+            <div class="form-group">
+                <button type="submit" class="submit-btn">선택률 계산하기</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- 실시간 요약 -->
+    <div class="summary-section" id="summarySection" style="display: none;">
+        <h3>선택한 조건 요약</h3>
+        <div id="selectedConditions" class="selected-conditions"></div>
+        <div class="calculation-notice">
+            <p>💡 선택한 조건들을 바탕으로 전체 이성 중 몇 %를 원하는지 계산합니다.</p>
         </div>
-    </form>
+    </div>
 
     <!-- 결과 표시 영역 -->
-    <div id="resultContainer" class="result-container" style="display: none;">
-        <h3>매칭 확률 결과</h3>
-        <div id="resultContent"></div>
+    <div class="result-section" id="resultSection" style="display: none;">
+        <h2>계산 결과</h2>
+        <div class="result-card">
+            <div class="percentage-display">
+                <div class="percentage-circle">
+                    <span id="percentageValue">0</span>%
+                </div>
+                <div class="percentage-label">
+                    <span id="percentageLabel">전체 이성 중</span>
+                </div>
+            </div>
+            
+            <div class="result-details">
+                <h3>상세 분석</h3>
+                <div id="resultDetails"></div>
+            </div>
+
+            <!-- 현실적 해석 -->
+            <div class="reality-check">
+                <h3>💡 현실적 해석</h3>
+                <div id="realityMessage" class="reality-message"></div>
+            </div>
+
+            <!-- 공유 이미지 -->
+            <div class="share-section">
+                <h3>결과 공유하기</h3>
+                <div id="resultImage" class="result-image"></div>
+                <button id="downloadBtn" class="download-btn">이미지 다운로드</button>
+                <button id="shareBtn" class="share-btn">공유하기</button>
+            </div>
+        </div>
     </div>
+
+    <!-- 로딩 표시 -->
+    <div class="loading-section" id="loadingSection" style="display: none;">
+        <div class="loading-spinner"></div>
+        <p>통계를 계산하고 있습니다...</p>
+    </div>
+</div>
+
+<!-- 코믹 멘트 영역 -->
+<div class="comic-section" id="comicSection" style="display: none;">
+    <h3>💬 한마디</h3>
+    <div id="comicMessage" class="comic-message"></div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-    // 폼 제출 이벤트 처리
-    document.getElementById('idealTypeForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        // 폼 데이터 수집
-        const formData = {
-            age_range: [
-                parseInt(document.getElementById('ageMin').value),
-                parseInt(document.getElementById('ageMax').value)
-            ],
-            location: document.getElementById('location').value,
-            interests: getSelectedInterests(),
-            style: document.getElementById('style').value,
-            height: document.getElementById('height').value
-        };
-        
+// 페이지 로드 시 초기화
+document.addEventListener('DOMContentLoaded', function() {
+    initializeForm();
+    // noUiSlider 로드 확인 후 초기화 재시도
+    const startNoUi = () => {
+        if (window.noUiSlider) {
+            initNoUiDual('height', 140, 200, 1, [165, 175], 'cm');
+            initNoUiDual('salary', 0, 10000, 100, [3000, 5000], '만원');
+            initNoUiDual('age', 18, 100, 1, [25, 34], '세');
+            // 외모: 조작은 부드럽게(1단위), 세밀 조정은 숫자 입력으로
+            initNoUiDual('appearance', 0, 100, 1, [0, 20], '%');
+        } else {
+            setTimeout(startNoUi, 50);
+        }
+    };
+    startNoUi();
+    // 외모: noUiSlider 듀얼 핸들로 관리되므로 단일 슬라이더 세팅은 불필요
+    bindAnyToggles();
+    updateSummary();
+});
+
+// 폼 초기화
+function initializeForm() {
+    const form = document.getElementById('idealTypeForm');
+    const inputs = form.querySelectorAll('select, input');
+    
+    // 입력값 변경 시 요약 업데이트
+    inputs.forEach(input => {
+        input.addEventListener('change', updateSummary);
+        input.addEventListener('input', updateSummary);
+    });
+    
+    // 체크박스 이벤트 처리
+    const smokingCheckbox = document.getElementById('smoking');
+    if (smokingCheckbox) {
+        smokingCheckbox.addEventListener('change', updateSummary);
+    }
+    
+    // 폼 제출 처리
+    form.addEventListener('submit', handleFormSubmit);
+}
+
+// 지역 프리셋 토글
+function presetRegions(type) {
+    const chipInputs = Array.from(document.querySelectorAll('#regionsChips input[name=regions]'));
+    const byValue = (v) => chipInputs.find(el => el.value === v);
+    const setChecked = (vals) => {
+        chipInputs.forEach(el => el.checked = false);
+        vals.forEach(v => { const el = byValue(v); if (el) el.checked = true; });
+        document.getElementById('regionsAny').checked = false;
+        // 활성화 보장
+        const chips = document.getElementById('regionsChips');
+        chips.classList.remove('disabled');
+        Array.from(chips.querySelectorAll('input')).forEach(el => el.disabled = false);
+        updateRegionBadges();
+        updateSummary();
+    };
+    if (type === 'metro') {
+        setChecked(['서울특별시', '경기도', '인천광역시']);
+    } else if (type === 'big') {
+        setChecked(['부산광역시','대구광역시','광주광역시','대전광역시','울산광역시']);
+    } else {
+        chipInputs.forEach(el => el.checked = false);
+        document.getElementById('regionsAny').checked = true;
+        bindAnyToggles();
+        updateRegionBadges();
+        updateSummary();
+    }
+}
+
+// 지역 그룹 뱃지 업데이트
+function updateRegionBadges() {
+    const selected = Array.from(document.querySelectorAll('#regionsChips input[name=regions]:checked')).map(el => el.value);
+    const metro = ['서울특별시', '경기도', '인천광역시'];
+    const big = ['부산광역시','대구광역시','광주광역시','대전광역시','울산광역시'];
+    const metroCount = metro.filter(v => selected.includes(v)).length;
+    const bigCount = big.filter(v => selected.includes(v)).length;
+    const metroBadge = document.getElementById('metroState');
+    const bigBadge = document.getElementById('bigState');
+    if (metroBadge) metroBadge.textContent = `${metroCount}/3`;
+    if (bigBadge) bigBadge.textContent = `${bigCount}/5`;
+}
+
+// 지역 칩 선택 변경 시 뱃지 갱신
+document.addEventListener('change', (e) => {
+    if (e.target && e.target.matches('#regionsChips input[name=regions]')) {
+        updateRegionBadges();
+    }
+});
+
+// 실시간 요약 업데이트
+function updateSummary() {
+    const form = document.getElementById('idealTypeForm');
+    const selectedConditions = [];
+
+    // 성별
+    const gender = document.getElementById('gender').value;
+    if (gender) selectedConditions.push(`성별: ${gender}`);
+
+    // 키
+    if (document.getElementById('heightAny').checked) {
+        selectedConditions.push('키: 상관없음');
+    } else {
+        const hMin = document.getElementById('heightMin').value;
+        const hMax = document.getElementById('heightMax').value;
+        if (hMin && hMax) selectedConditions.push(`키: ${hMin}–${hMax}cm`);
+    }
+
+    // 연봉
+    if (document.getElementById('salaryAny').checked) {
+        selectedConditions.push('연봉: 상관없음');
+    } else {
+        const sMin = document.getElementById('salaryMin').value;
+        const sMax = document.getElementById('salaryMax').value;
+        if (sMin && sMax) selectedConditions.push(`연봉: ${sMin}–${sMax}만원`);
+    }
+
+    // 나이
+    if (document.getElementById('ageAny').checked) {
+        selectedConditions.push('나이: 상관없음');
+    } else {
+        const aMin = document.getElementById('ageMin').value;
+        const aMax = document.getElementById('ageMax').value;
+        if (aMin && aMax) selectedConditions.push(`나이: ${aMin}–${aMax}세`);
+    }
+
+    // 학력 다중 (상관없음 토글 무시하고 실제 선택 표시)
+    const eduLevelsSel = Array.from(document.querySelectorAll('input[name=education_levels]:checked')).map(el => el.value);
+    if (eduLevelsSel.length) {
+        selectedConditions.push(`학력(${eduLevelsSel.length}): ${eduLevelsSel.join(', ')}`);
+    } else {
+        selectedConditions.push('학력: 상관없음');
+    }
+
+    // 직업 다중
+    const occAny = document.getElementById('occupationsAny').checked;
+    if (!occAny) {
+        const occs = Array.from(document.querySelectorAll('input[name=occupations]:checked')).map(el => el.value);
+        if (occs.length) selectedConditions.push(`직업: ${occs.join(', ')}`); else selectedConditions.push('직업: 상관없음');
+    } else {
+        selectedConditions.push('직업: 상관없음');
+    }
+
+    // 외모 상위 퍼센트
+    if (document.getElementById('appearanceAny').checked) {
+        selectedConditions.push('외모: 상관없음');
+    } else {
+        const aMin = document.getElementById('appearanceMin').value;
+        const aMax = document.getElementById('appearanceMax').value;
+        if (aMin && aMax) selectedConditions.push(`외모: 상위 ${aMin}–${aMax}%`);
+    }
+
+    // 지역 다중 (실제 선택 표시)
+    const regs = Array.from(document.querySelectorAll('input[name=regions]:checked')).map(el => el.value);
+    if (regs.length) selectedConditions.push(`지역(${regs.length}): ${regs.join(', ')}`); else selectedConditions.push('지역: 상관없음');
+    
+    const summarySection = document.getElementById('summarySection');
+    const selectedConditionsDiv = document.getElementById('selectedConditions');
+    
+    if (selectedConditions.length > 0) {
+        selectedConditionsDiv.innerHTML = selectedConditions.map(condition => 
+            `<div class="condition-item">• ${condition}</div>`
+        ).join('');
+        summarySection.style.display = 'block';
+    } else {
+        summarySection.style.display = 'none';
+    }
+}
+
+// 폼 제출 처리
+async function handleFormSubmit(event) {
+    event.preventDefault();
+    
+    const filters = {};
+
+    // 성별
+    const gender = document.getElementById('gender').value;
+    if (!gender) { alert('이상형의 성별을 선택해주세요!'); return; }
+    filters.gender = gender;
+
+    // 키 범위
+    if (!document.getElementById('heightAny').checked) {
+        const hMin = parseInt(document.getElementById('heightMin').value);
+        const hMax = parseInt(document.getElementById('heightMax').value);
+        if (!Number.isInteger(hMin) || !Number.isInteger(hMax) || hMin < 140 || hMax > 200 || hMin >= hMax) {
+            alert('올바른 키 범위를 입력해주세요 (140-200cm, 최소 < 최대).');
+            return;
+        }
+        filters.height_range = [hMin, hMax];
+    }
+
+    // 연봉 범위
+    if (!document.getElementById('salaryAny').checked) {
+        const sMin = parseInt(document.getElementById('salaryMin').value);
+        const sMax = parseInt(document.getElementById('salaryMax').value);
+        if (!Number.isInteger(sMin) || !Number.isInteger(sMax) || sMin < 0 || sMax > 10000 || sMin >= sMax) {
+            alert('올바른 연봉 범위를 입력해주세요 (0-10000만원, 최소 < 최대).');
+            return;
+        }
+        filters.salary_range = [sMin, sMax];
+    }
+
+    // 나이 범위
+    if (!document.getElementById('ageAny').checked) {
+        const aMin = parseInt(document.getElementById('ageMin').value);
+        const aMax = parseInt(document.getElementById('ageMax').value);
+        if (!Number.isInteger(aMin) || !Number.isInteger(aMax) || aMin < 18 || aMax > 100 || aMin >= aMax) {
+            alert('올바른 나이 범위를 입력해주세요 (18-100세, 최소 < 최대).');
+            return;
+        }
+        filters.age_range = [aMin, aMax];
+    }
+
+    // 학력 다중
+    {
+        const levels = Array.from(document.querySelectorAll('input[name=education_levels]:checked')).map(el => el.value);
+        if (levels.length) filters.education_levels = levels;
+    }
+
+    // 직업 다중
+    if (!document.getElementById('occupationsAny').checked) {
+        const occs = Array.from(document.querySelectorAll('input[name=occupations]:checked')).map(el => el.value);
+        if (occs.length) filters.occupations = occs;
+    }
+
+    // 흡연
+    if (document.getElementById('smoking').checked) {
+        filters.smoking = '비흡연';
+    }
+
+    // 외모 상위 퍼센트 범위
+    if (!document.getElementById('appearanceAny').checked) {
+        const aMin = parseInt(document.getElementById('appearanceMin').value);
+        const aMax = parseInt(document.getElementById('appearanceMax').value);
+        if (!Number.isInteger(aMin) || !Number.isInteger(aMax) || aMin < 0 || aMax > 100 || aMin >= aMax) {
+            alert('외모 상위 퍼센트는 0-100 사이, 최소 < 최대로 입력해주세요.');
+            return;
+        }
+        filters.appearance_top_percent_range = [aMin, aMax];
+    }
+
+    // 지역 다중
+    {
+        const regs = Array.from(document.querySelectorAll('input[name=regions]:checked')).map(el => el.value);
+        if (regs.length) filters.regions = regs;
+    }
+    
+    // 필수 필드 검증
+    if (!filters.gender) {
+        alert('이상형의 성별을 선택해주세요!');
+        return;
+    }
+    
+    // 로딩 표시
+    showLoading();
+    
+    try {
         // API 호출
-        submitIdealTypeData(formData);
-    });
-    
-    // 관심사 태그 선택 처리
-    document.querySelectorAll('.interest-tag').forEach(tag => {
-        tag.addEventListener('click', function() {
-            this.classList.toggle('selected');
-            updateSelectedInterests();
+        const response = await fetch('/api/calculate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(filters)
         });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            displayResult(result.data);
+            generateRealityMessage(result.data);
+            generateComicMessage(result.data);
+        } else {
+            alert('계산 중 오류가 발생했습니다: ' + result.message);
+        }
+        
+    } catch (error) {
+        console.error('API 호출 오류:', error);
+        alert('서버 연결에 실패했습니다.');
+    } finally {
+        hideLoading();
+    }
+}
+
+// noUiSlider 기반 듀얼 핸들 슬라이더 초기화
+function initNoUiDual(prefix, min, max, step, start, unit) {
+    const slider = document.getElementById(prefix + 'Slider');
+    const minNum = document.getElementById(prefix + 'Min');
+    const maxNum = document.getElementById(prefix + 'Max');
+    const hint = document.getElementById(prefix + 'Hint');
+    if (!slider || !minNum || !maxNum || !window.noUiSlider) return;
+
+    noUiSlider.create(slider, {
+        start: start,
+        connect: true,
+        range: { min: min, max: max },
+        step: step,
+        behaviour: 'tap-drag'
     });
+
+    slider.noUiSlider.on('update', (values) => {
+        const v0 = Math.round(values[0]);
+        const v1 = Math.round(values[1]);
+        if (parseInt(minNum.value) !== v0) minNum.value = v0;
+        if (parseInt(maxNum.value) !== v1) maxNum.value = v1;
+        if (hint) {
+            if (prefix === 'appearance') {
+                hint.textContent = `선택: 상위 ${v0}–${v1}%`;
+            } else {
+                hint.textContent = `선택: ${v0}–${v1}${unit}`;
+            }
+        }
+    });
+
+    const clamp = (v) => Math.max(min, Math.min(max, v));
+    const applyFromInputs = () => {
+        const rawMin = parseInt(minNum.value);
+        const rawMax = parseInt(maxNum.value);
+        if (!Number.isInteger(rawMin) || !Number.isInteger(rawMax)) return;
+        const v0 = clamp(rawMin);
+        const v1 = clamp(rawMax);
+        if (prefix === 'appearance' && v0 === v1) {
+            // 최소/최대가 같은 경우, 한 칸 확장하여 세팅
+            const bump = step || 1;
+            const nv1 = clamp(v1 + bump);
+            if (nv1 > v1) {
+                slider.noUiSlider.set([v0, nv1]);
+                return;
+            }
+        }
+        if (v0 >= v1) return; // 유효 범위 아닐 때 무시하고 사용자가 계속 입력할 수 있게 둠
+        slider.noUiSlider.set([v0, v1]);
+    };
+    ['change'].forEach(ev => {
+        minNum.addEventListener(ev, applyFromInputs);
+        maxNum.addEventListener(ev, applyFromInputs);
+    });
+    const onEnter = (e, el) => { if (e.key === 'Enter') { e.preventDefault(); applyFromInputs(); el.blur(); } };
+    minNum.addEventListener('keydown', (e) => onEnter(e, minNum));
+    maxNum.addEventListener('keydown', (e) => onEnter(e, maxNum));
+}
+
+// 단일 슬라이더(외모 등)와 숫자 입력 동기화
+function setupSingleRange(prefix) {
+    const any = document.getElementById(prefix + 'Any');
+    const num = document.getElementById(prefix + 'Min');
+    const slider = document.getElementById(prefix + 'L');
+    const controls = document.getElementById(prefix + 'Controls');
+    const hint = document.getElementById(prefix + 'Hint');
+    if (!num || !slider) return;
+    const unit = prefix === 'appearance' ? '% (상위)' : '';
+    function sync() {
+        const v = parseInt(slider.value);
+        num.value = v;
+        if (hint) hint.textContent = `선택: 상위 ${v}% 이상`;
+    }
+    slider.addEventListener('input', sync);
+    num.addEventListener('input', () => {
+        slider.value = num.value;
+        sync();
+    });
+}
+
+// 상관없음 토글 바인딩
+function bindAnyToggles() {
+    [
+        { any: 'heightAny', controls: 'heightControls', hint: 'heightHint', text: '선택: 상관없음' },
+        { any: 'salaryAny', controls: 'salaryControls', hint: 'salaryHint', text: '선택: 상관없음' },
+        { any: 'ageAny', controls: 'ageControls', hint: 'ageHint', text: '선택: 상관없음' },
+        { any: 'educationAny', controls: 'educationChips' },
+        { any: 'occupationsAny', controls: 'occupationsGrid' },
+        { any: 'regionsAny', controls: 'regionsChips' },
+        { any: 'appearanceAny', controls: 'appearanceControls', hint: 'appearanceHint', text: '선택: 상관없음 (선택 시 상위 A–B% 구간을 의미)' },
+    ].forEach(cfg => {
+        const anyEl = document.getElementById(cfg.any);
+        const controlsEl = document.getElementById(cfg.controls);
+        const hintEl = cfg.hint ? document.getElementById(cfg.hint) : null;
+        if (!anyEl || !controlsEl) return;
+        const setDisabled = (disabled) => {
+            controlsEl.classList.toggle('disabled', disabled);
+            Array.from(controlsEl.querySelectorAll('input, select')).forEach(el => el.disabled = disabled);
+            if (hintEl && cfg.text) hintEl.textContent = disabled ? cfg.text : hintEl.textContent;
+        };
+        setDisabled(anyEl.checked);
+        anyEl.addEventListener('change', () => setDisabled(anyEl.checked));
+    });
+}
+
+// 결과 표시
+function displayResult(resultData) {
+    const resultSection = document.getElementById('resultSection');
+    const percentageValue = document.getElementById('percentageValue');
+    const percentageLabel = document.getElementById('percentageLabel');
+    const resultDetails = document.getElementById('resultDetails');
     
-    function getSelectedInterests() {
-        const selectedTags = document.querySelectorAll('.interest-tag.selected');
-        return Array.from(selectedTags).map(tag => tag.dataset.value);
+    // 확률 및 등급 표시
+    percentageValue.textContent = resultData.probability;
+    percentageLabel.textContent = `전체 ${resultData.filters.gender} 중`;
+    
+    // 간결한 계산 과정(조건 + 비율 변화만) + 마지막에 인원수
+    const details = resultData.calculation_details;
+    resultDetails.innerHTML = renderCondAndRates(details.explanation_steps, resultData.population, resultData.probability);
+    
+    // 결과 섹션 표시
+    resultSection.style.display = 'block';
+    
+    // 이미지 생성
+    generateResultImage(resultData);
+}
+
+function renderCondAndRates(steps, population, probability) {
+    if (!Array.isArray(steps) || steps.length === 0) return '';
+    const items = steps.map(s => {
+        const fromP = (typeof s.from_percent === 'number') ? s.from_percent.toFixed(2) : s.from_percent;
+        const toP = (typeof s.to_percent === 'number') ? s.to_percent.toFixed(2) : s.to_percent;
+        return `<li>${s.label}${s.value ? ` (${s.value})` : ''}: ${fromP}% → ${toP}%</li>`;
+    }).join('');
+    let finalCount = null;
+    const last = steps[steps.length - 1];
+    if (last && typeof last.to_count === 'number') {
+        finalCount = last.to_count;
+    } else if (population && population.total && typeof probability === 'number') {
+        finalCount = Math.round((probability / 100) * population.total);
+    }
+    const finalLine = finalCount !== null ? `<p style="margin-top:0.5rem;"><strong>최종 예상 인원수:</strong> 약 ${finalCount.toLocaleString()}명</p>` : '';
+    return `
+    <div class="result-details" style="margin-top:1rem;">
+        <h3>계산 과정</h3>
+        <ol style="margin-left:1.2rem; line-height:1.6;">${items}</ol>
+        ${finalLine}
+    </div>`;
+}
+
+// 현실적 해석 메시지 생성
+function generateRealityMessage(resultData) {
+    const realitySection = document.getElementById('realityMessage');
+    const percentage = resultData.probability;
+    
+    let message = '';
+    
+    if (percentage < 0.1) {
+        message = '🎯 이 정도면 로또 당첨보다 어려워요! 이런 조건을 원한다면 정말 특별한 사람을 찾아야 할 것 같아요.';
+    } else if (percentage < 1.0) {
+        message = '🌟 매우 드문 조건이네요! 100명 중 1명도 안 되는 비율이에요. 인내심이 필요할 것 같아요.';
+    } else if (percentage < 5.0) {
+        message = '💎 꽤 특별한 조건이에요! 20명 중 1명 정도의 비율이네요. 조금만 기다리면 만날 수 있을 거예요.';
+    } else if (percentage < 15.0) {
+        message = '✨ 현실적이면서도 나름 특별한 조건이에요! 7명 중 1명 정도라면 충분히 만날 수 있을 거예요.';
+    } else if (percentage < 30.0) {
+        message = '😊 무난하고 좋은 조건이네요! 3명 중 1명 정도라면 주변에서 쉽게 찾을 수 있을 거예요.';
+    } else {
+        message = '🌱 매우 현실적인 조건이에요! 3명 중 1명 이상이라면 주변에 많이 있을 거예요.';
     }
     
-    function updateSelectedInterests() {
-        const interests = getSelectedInterests();
-        document.getElementById('selectedInterests').value = JSON.stringify(interests);
+    realitySection.textContent = message;
+}
+
+// 결과 이미지 생성
+async function generateResultImage(resultData) {
+    try {
+        const response = await fetch('/api/generate-image', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(resultData)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            const resultImage = document.getElementById('resultImage');
+            resultImage.innerHTML = `<img src="${result.data.image_data}" alt="결과 카드" style="max-width: 100%; height: auto;">`;
+        }
+        
+    } catch (error) {
+        console.error('이미지 생성 오류:', error);
     }
+}
+
+// 코믹 멘트 생성
+function generateComicMessage(resultData) {
+    const comicSection = document.getElementById('comicSection');
+    const comicMessage = document.getElementById('comicMessage');
+    
+    const percentage = resultData.probability;
+    
+    let message = '';
+    
+    if (percentage < 0.1) {
+        message = '이런 조건을 원한다면... 차라리 외계인을 찾는 게 더 쉬울 수도? 👽';
+    } else if (percentage < 1.0) {
+        message = '100명 중 1명도 안 된다니... 인내심의 시험이네요! 🧘‍♀️';
+    } else if (percentage < 5.0) {
+        message = '20명 중 1명이라면... 조금만 기다리면 나타날 거예요! ⏰';
+    } else if (percentage < 15.0) {
+        message = '7명 중 1명이라면 충분히 현실적이에요! 주변을 둘러보세요! 👀';
+    } else if (percentage < 30.0) {
+        message = '3명 중 1명이라면 주변에 많이 있을 거예요! 눈을 크게 뜨고 찾아보세요! 👁️';
+    } else {
+        message = '3명 중 1명 이상이라면... 이미 주변에 있을 수도? 다시 한번 둘러보세요! 🔍';
+    }
+    
+    comicMessage.textContent = message;
+    comicSection.style.display = 'block';
+}
+
+// 로딩 표시
+function showLoading() {
+    document.getElementById('loadingSection').style.display = 'block';
+    document.getElementById('resultSection').style.display = 'none';
+    document.getElementById('comicSection').style.display = 'none';
+}
+
+function hideLoading() {
+    document.getElementById('loadingSection').style.display = 'none';
+}
+
+// 이미지 다운로드
+document.getElementById('downloadBtn')?.addEventListener('click', function() {
+    const img = document.querySelector('#resultImage img');
+    if (img) {
+        const link = document.createElement('a');
+        link.download = '이상형_선택률_결과.png';
+        link.href = img.src;
+        link.click();
+    }
+});
+
+// 공유하기
+document.getElementById('shareBtn')?.addEventListener('click', function() {
+    if (navigator.share) {
+        navigator.share({
+            title: '이상형 선택률 분석 결과',
+            text: '내가 원하는 이상형이 전체 이성 중 몇 %인지 계산해봤어요!',
+            url: window.location.href
+        });
+    } else {
+        // 클립보드에 복사
+        navigator.clipboard.writeText(window.location.href).then(() => {
+            alert('링크가 클립보드에 복사되었습니다!');
+        });
+    }
+});
 </script>
 {% endblock %} 

@@ -1,19 +1,16 @@
 # backend/app/extensions.py
-# 확장 기능 초기화 (DB, 캐시 등)
+# Flask 확장 기능 초기화
 
-# TODO: 필요한 확장 기능 추가
-# from flask_sqlalchemy import SQLAlchemy
-# from flask_caching import Cache
+from flask_sqlalchemy import SQLAlchemy
+from flask_caching import Cache
 
-# db = SQLAlchemy()
-# cache = Cache()
+# 데이터베이스
+db = SQLAlchemy()
 
-# def init_extensions(app):
-#     '''
-#     Flask 앱에 확장 기능 초기화
-#     
-#     Args:
-#         app: Flask 애플리케이션 인스턴스
-#     '''
-#     db.init_app(app)
-#     cache.init_app(app) 
+# 캐시 (선택적)
+cache = Cache()
+
+# TODO: 필요에 따라 추가 확장 기능 초기화
+# from flask_login import LoginManager
+# from flask_migrate import Migrate
+# from flask_cors import CORS 

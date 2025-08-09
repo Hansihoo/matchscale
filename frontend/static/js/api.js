@@ -1,207 +1,192 @@
 // frontend/static/js/api.js
-// 백엔드 API 통신 래퍼
+// 통계 기반 매칭 확률 계산 API 통신 래퍼
 
-// API 기본 URL
 const API_BASE_URL = '/api';
 
-// HTTP 요청 헬퍼 함수
-async function makeRequest(endpoint, options = {}) {
-    const url = `${API_BASE_URL}${endpoint}`;
-    
-    const defaultOptions = {
-        headers: {
-            'Content-Type': 'application/json',
-        },
-    };
-    
-    const requestOptions = {
-        ...defaultOptions,
-        ...options,
-        headers: {
-            ...defaultOptions.headers,
-            ...options.headers,
-        },
-    };
-    
+/**
+ * 이상형 조건 데이터를 서버에 제출하여 매칭 확률을 계산합니다.
+ * 
+ * @param {Object} formData - 이상형 조건 데이터
+ * @returns {Promise<Object>} 매칭 확률 결과
+ */
+async function submitIdealTypeData(formData) {
     try {
-        const response = await fetch(url, requestOptions);
-        
+        const response = await fetch(`${API_BASE_URL}/submit`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(formData)
+        });
+
+        const result = await response.json();
+
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            throw new Error(result.error || '서버 오류가 발생했습니다.');
         }
-        
-        return await response.json();
-    } catch (error) {
-        console.error('API 요청 실패:', error);
-        throw error;
-    }
-}
 
-// 이상형 데이터 제출
-async function submitIdealTypeData(data) {
-    try {
-        const response = await makeRequest('/submit', {
-            method: 'POST',
-            body: JSON.stringify(data),
-        });
-        
-        if (response.success) {
-            // 확률 계산 결과 표시
-            displayCalculationResult(response);
-        } else {
-            showMessage(response.error || '처리 중 오류가 발생했습니다.', 'error');
+        if (!result.success) {
+            throw new Error(result.error || '요청 처리에 실패했습니다.');
         }
+
+        return result.result;
+
     } catch (error) {
-        showMessage('서버 연결에 실패했습니다.', 'error');
-    } finally {
-        hideLoading();
-    }
-}
-
-// 확률 계산 결과 표시
-function displayCalculationResult(response) {
-    const resultContainer = document.getElementById('resultContainer');
-    const resultContent = document.getElementById('resultContent');
-    
-    if (resultContainer && resultContent) {
-        // TODO: 실제 확률 계산 결과를 받아서 표시
-        // 현재는 임시 데이터 사용
-        
-        const mockResult = {
-            probability: Math.floor(Math.random() * 100),
-            rarity_level: getRarityLevel(Math.floor(Math.random() * 100)),
-            filters: response.data
-        };
-        
-        resultContent.innerHTML = `
-            <div class="result-item">
-                <div class="probability-display">
-                    <h4>매칭 확률</h4>
-                    <div class="probability-number">${mockResult.probability}%</div>
-                    <div class="rarity-badge ${getRarityClass(mockResult.rarity_level)}">
-                        ${mockResult.rarity_level}
-                    </div>
-                </div>
-                <div class="result-details">
-                    <h5>입력한 조건</h5>
-                    <ul>
-                        <li>나이: ${mockResult.filters.age_range[0]}~${mockResult.filters.age_range[1]}세</li>
-                        <li>지역: ${getLocationName(mockResult.filters.location)}</li>
-                        <li>관심사: ${mockResult.filters.interests.join(', ')}</li>
-                        ${mockResult.filters.style ? `<li>스타일: ${getStyleName(mockResult.filters.style)}</li>` : ''}
-                        ${mockResult.filters.height ? `<li>키: ${mockResult.filters.height}</li>` : ''}
-                    </ul>
-                </div>
-            </div>
-        `;
-        
-        resultContainer.style.display = 'block';
-        resultContainer.scrollIntoView({ behavior: 'smooth' });
-    }
-}
-
-// 희귀도 레벨에 따른 클래스 반환
-function getRarityClass(rarity) {
-    switch (rarity) {
-        case '매우 희귀':
-            return 'rarity-legendary';
-        case '희귀':
-            return 'rarity-rare';
-        case '보통':
-            return 'rarity-common';
-        case '흔함':
-            return 'rarity-common';
-        default:
-            return 'rarity-common';
-    }
-}
-
-// 희귀도 레벨 계산
-function getRarityLevel(probability) {
-    if (probability >= 80) return '매우 희귀';
-    if (probability >= 60) return '희귀';
-    if (probability >= 30) return '보통';
-    return '흔함';
-}
-
-// 지역명 변환
-function getLocationName(locationCode) {
-    const locationMap = {
-        'seoul': '서울',
-        'busan': '부산',
-        'daegu': '대구',
-        'incheon': '인천',
-        'gwangju': '광주',
-        'daejeon': '대전',
-        'ulsan': '울산',
-        'sejong': '세종',
-        'gyeonggi': '경기도',
-        'gangwon': '강원도',
-        'chungbuk': '충청북도',
-        'chungnam': '충청남도',
-        'jeonbuk': '전라북도',
-        'jeonnam': '전라남도',
-        'gyeongbuk': '경상북도',
-        'gyeongnam': '경상남도',
-        'jeju': '제주도'
-    };
-    
-    return locationMap[locationCode] || locationCode;
-}
-
-// 스타일명 변환
-function getStyleName(styleCode) {
-    const styleMap = {
-        'cute': '귀여운',
-        'elegant': '우아한',
-        'casual': '캐주얼',
-        'sporty': '스포티',
-        'classic': '클래식'
-    };
-    
-    return styleMap[styleCode] || styleCode;
-}
-
-// 확률 계산 API 호출
-async function calculateProbability(filters) {
-    try {
-        const response = await makeRequest('/calculate-probability', {
-            method: 'POST',
-            body: JSON.stringify(filters),
-        });
-        
-        return response;
-    } catch (error) {
-        console.error('확률 계산 실패:', error);
+        console.error('API 호출 오류:', error);
         throw error;
     }
 }
 
-// 이미지 생성 API 호출
-async function generateImage(filters) {
+/**
+ * 통계 데이터 요약 정보를 조회합니다.
+ * 
+ * @returns {Promise<Object>} 통계 데이터 요약
+ */
+async function getStatisticsSummary() {
     try {
-        const response = await makeRequest('/generate-image', {
-            method: 'POST',
-            body: JSON.stringify(filters),
-        });
-        
-        return response;
-    } catch (error) {
-        console.error('이미지 생성 실패:', error);
-        throw error;
-    }
-}
-
-// 통계 데이터 조회
-async function getStatistics() {
-    try {
-        const response = await makeRequest('/statistics', {
+        const response = await fetch(`${API_BASE_URL}/statistics`, {
             method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            }
         });
-        
-        return response;
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || '서버 오류가 발생했습니다.');
+        }
+
+        return result.data;
+
     } catch (error) {
-        console.error('통계 데이터 조회 실패:', error);
+        console.error('통계 데이터 조회 오류:', error);
         throw error;
     }
-} 
+}
+
+/**
+ * 사용 가능한 조건 옵션들을 조회합니다.
+ * 
+ * @returns {Promise<Object>} 조건별 옵션 데이터
+ */
+async function getAvailableConditions() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/conditions`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || '서버 오류가 발생했습니다.');
+        }
+
+        return result.data;
+
+    } catch (error) {
+        console.error('조건 옵션 조회 오류:', error);
+        throw error;
+    }
+}
+
+/**
+ * 조건별 인구 비율을 계산합니다.
+ * 
+ * @param {Object} conditions - 선택된 조건들
+ * @returns {Object} 조건별 비율 정보
+ */
+function calculateConditionRatios(conditions) {
+    const ratios = {};
+    
+    // 키 조건 비율
+    if (conditions.height) {
+        const heightRatios = {
+            '150-155': 8.5, '155-160': 15.2, '160-165': 25.8,
+            '165-170': 28.4, '170-175': 15.1, '175-180': 5.8, '180-185': 1.2
+        };
+        ratios.height = heightRatios[conditions.height] || 0;
+    }
+    
+    // 학력 조건 비율
+    if (conditions.education) {
+        const educationRatios = {
+            'SKY': 3.2, '인서울': 12.5, '지거국': 8.7,
+            '4년제': 45.3, '이하': 30.3
+        };
+        ratios.education = educationRatios[conditions.education] || 0;
+    }
+    
+    // 연봉 조건 비율
+    if (conditions.salary) {
+        const salaryRatios = {
+            '2000만원 이하': 35.2, '2000-3000만원': 28.7,
+            '3000-4000만원': 18.9, '4000-5000만원': 10.2, '5000만원 이상': 7.0
+        };
+        ratios.salary = salaryRatios[conditions.salary] || 0;
+    }
+    
+    // 직업 조건 비율
+    if (conditions.job) {
+        const jobRatios = {
+            '전문직': 12.5, '공무원': 8.3, '공기업': 5.7, '그 외': 73.5
+        };
+        ratios.job = jobRatios[conditions.job] || 0;
+    }
+    
+    // 지역 조건 비율
+    if (conditions.location) {
+        const locationRatios = {
+            '수도권': 45.8, '지방광역시': 28.9, '기타': 25.3
+        };
+        ratios.location = locationRatios[conditions.location] || 0;
+    }
+    
+    return ratios;
+}
+
+/**
+ * 전체 매칭 확률을 계산합니다.
+ * 
+ * @param {Object} conditionRatios - 조건별 비율
+ * @returns {number} 전체 매칭 확률 (%)
+ */
+function calculateTotalProbability(conditionRatios) {
+    if (Object.keys(conditionRatios).length === 0) {
+        return 100.0;
+    }
+    
+    let totalProbability = 100.0;
+    
+    Object.values(conditionRatios).forEach(ratio => {
+        totalProbability *= (ratio / 100);
+    });
+    
+    return Math.round(totalProbability * 100) / 100;
+}
+
+/**
+ * 확률에 따른 희귀도 레벨을 반환합니다.
+ * 
+ * @param {number} probability - 매칭 확률
+ * @returns {string} 희귀도 레벨
+ */
+function getRarityLevel(probability) {
+    if (probability >= 10.0) return '매우 흔함';
+    if (probability >= 5.0) return '흔함';
+    if (probability >= 2.0) return '보통';
+    if (probability >= 0.5) return '희귀';
+    if (probability >= 0.1) return '매우 희귀';
+    return '극히 희귀';
+}
+
+// 전역 함수로 노출
+window.submitIdealTypeData = submitIdealTypeData;
+window.getStatisticsSummary = getStatisticsSummary;
+window.getAvailableConditions = getAvailableConditions;
+window.calculateConditionRatios = calculateConditionRatios;
+window.calculateTotalProbability = calculateTotalProbability;
+window.getRarityLevel = getRarityLevel; 

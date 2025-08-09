@@ -22,16 +22,19 @@
 ## 엔드포인트 목록
 
 ### 1. 이상형 조건 제출
-- **URL**: `POST /api/submit`
+- **URL**: `POST /api/calculate`
 - **설명**: 사용자가 입력한 이상형 조건을 제출하고 확률을 계산
 - **요청 본문**:
 ```json
 {
-    "age_range": [25, 35],
-    "location": "seoul",
-    "interests": ["travel", "music", "cooking"],
-    "style": "cute",
-    "height": "160-170"
+    "gender": "여성",
+    "age_range": [25, 34],
+    "height": "160-165",
+    "education": "4년제",
+    "salary": "3000-4000만원",
+    "job": "전문직",
+    "location": "수도권",
+    "smoking": "비흡연"
 }
 ```
 - **응답**:
@@ -47,10 +50,9 @@
 }
 ```
 
-### 2. 확률 계산 (향후 구현)
-- **URL**: `POST /api/calculate-probability`
-- **설명**: 이상형 조건에 따른 매칭 확률 계산
-- **상태**: TODO
+### 2. 통계 요약 조회
+- **URL**: `GET /api/statistics`
+- **설명**: 내부 통계 요약 정보 반환
 
 ### 3. 이미지 생성 (향후 구현)
 - **URL**: `POST /api/generate-image`

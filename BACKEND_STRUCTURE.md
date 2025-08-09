@@ -38,7 +38,7 @@ backend/
 
 | 경로 | 설명 |
 |------|------|
-| `app/__init__.py` | Flask 앱 생성 및 Blueprint 등록 |
+| `app/__init__.py` | Flask 앱 생성 및 Blueprint 등록, 템플릿/정적 파일 경로 설정 |
 | `app/config.py` | 환경별 설정 클래스 (개발/테스트/운영) |
 | `app/extensions.py` | 확장 기능 (DB, Redis 등) 초기화 |
 | `blueprints/core/routes.py` | 홈 페이지 및 입력 폼 라우팅 |
@@ -50,6 +50,24 @@ backend/
 | `data/` | 통계 자료 JSON, CSV 등 저장소 |
 | `tests/` | Pytest 기반 테스트 코드 저장소 |
 | `wsgi.py` | 배포 시 앱 실행을 위한 진입점 |
+
+---
+
+## Flask 앱 설정
+
+### 템플릿 및 정적 파일 경로
+- `app/__init__.py`에서 `frontend/templates`와 `frontend/static` 디렉토리를 Flask 앱의 템플릿/정적 파일 경로로 설정
+- 이를 통해 백엔드에서 프론트엔드 리소스에 접근 가능
+
+### 실행 방법
+```bash
+# 가장 간단한 방법
+python backend/wsgi.py
+
+# 환경 변수 설정 후 실행
+$env:FLASK_CONFIG="development"
+python backend/wsgi.py
+```
 
 ---
 
