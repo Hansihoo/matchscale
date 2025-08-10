@@ -54,7 +54,7 @@
 - **URL**: `GET /api/statistics`
 - **설명**: 내부 통계 요약 정보 반환
 
-### 3. 이미지 생성 (향후 구현)
+### 3. 이미지 생성
 - **URL**: `POST /api/generate-image`
 - **설명**: 이상형 조건에 맞는 프로필 이미지 생성
 - **상태**: TODO
@@ -80,9 +80,26 @@
 ### 확률 결과 (ProbabilityResult)
 ```json
 {
-    "probability": number,          // 확률 (0-100)
-    "rarity_level": string,         // 희귀도 레벨
-    "filters": object               // 입력한 필터 조건
+    "probability": number,          // 최종 확률 (0-100)
+    "selection_level": string,      // 선택률 등급
+    "filters": object,              // 입력한 필터 조건
+    "population": {                 // 계산에 사용된 모수
+        "total": number,            // 대상 총인구 (성별/지역 반영)
+        "gender": string            // 성별
+    },
+    "calculation_details": {
+        "individual_probabilities": [number],          // 각 단계 확률(곱셈 적용 순)
+        "total_conditions": number,                    // 단계 수
+        "applied_conditions": [string],                // 적용된 조건 라벨
+        "condition_details": [
+            {"condition": "나이", "value": "25-34세", "probability": 0.1475},
+            {"condition": "미혼률", "value": "", "probability": 0.1423}
+        ],
+        "explanation_steps": [                         // 화면 표기용 변환(퍼센트, 인원)
+            {"label": "연령 구간 비중", "from_percent": 100.0, "to_percent": 14.75},
+            {"label": "미혼률 계산", "from_percent": 14.75, "to_percent": 14.23}
+        ]
+    }
 }
 ```
 

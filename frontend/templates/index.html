@@ -32,27 +32,24 @@
                     <label class="any-toggle"><input type="checkbox" id="heightAny"> 상관없음</label>
                 </label>
                 <div class="range-row" id="heightControls">
-                    <input type="number" id="heightMin" min="140" max="200" step="1" placeholder="최소" value="165">
+                    <input type="number" id="heightMin" min="140" max="200" step="1" placeholder="최소" value="170">
                     <div id="heightSlider" class="nu-slider"></div>
-                    <input type="number" id="heightMax" min="140" max="200" step="1" placeholder="최대" value="175">
+                    <input type="number" id="heightMax" min="140" max="200" step="1" placeholder="최대" value="200">
                 </div>
                 <small class="form-text" id="heightHint">선택: 165–175cm</small>
             </div>
 
-            <!-- 학력 조건 (칩/다중선택) -->
+            <!-- 학력 조건 (슬라이더: 최소 학력 이상) -->
             <div class="form-group">
                 <label>학력
                     <label class="any-toggle"><input type="checkbox" id="educationAny"> 상관없음</label>
                 </label>
-                <div class="chip-group" id="educationChips">
-                    <label class="chip"><input type="checkbox" name="education_levels" value="SKY"><span>SKY</span></label>
-                    <label class="chip"><input type="checkbox" name="education_levels" value="인서울"><span>인서울</span></label>
-                    <label class="chip"><input type="checkbox" name="education_levels" value="지거국"><span>지거국</span></label>
-                    <label class="chip"><input type="checkbox" name="education_levels" value="4년제"><span>4년제</span></label>
-                    <label class="chip"><input type="checkbox" name="education_levels" value="이하"><span title="전문대(전문학사), 고졸, 검정고시 등 4년제 미만">전문대/고졸 이하</span></label>
+                <div class="range-row" id="educationControls">
+                    <input type="number" id="educationMin" min="0" max="4" step="1" value="1" style="display:none;">
+                    <div id="educationSlider" class="nu-slider"></div>
+                    <input type="text" id="educationLabel" value="4년제 이상" readonly>
                 </div>
-                <small class="form-text">여러 개 선택 가능. 아무 것도 선택하지 않으면 상관없음으로 처리</small>
-                <small class="form-text">‘전문대/고졸 이하’는 전문대(2–3년제·전문학사), 고졸, 검정고시 등 4년제 미만을 포함합니다.</small>
+                <small class="form-text" id="educationHint">선택: 4년제 이상 (전문대/고졸 이하는 4년제 미만을 포함)</small>
             </div>
 
             <!-- 연봉 조건 (듀얼 슬라이더 + 이상/이하 + 상관없음) -->
@@ -61,11 +58,11 @@
                     <label class="any-toggle"><input type="checkbox" id="salaryAny"> 상관없음</label>
                 </label>
                 <div class="range-row" id="salaryControls">
-                    <input type="number" id="salaryMin" min="0" max="10000" step="100" placeholder="최소" value="3000">
+                    <input type="number" id="salaryMin" min="0" max="100000" step="100" placeholder="최소(만원)" value="3000">
                     <div id="salarySlider" class="nu-slider"></div>
-                    <input type="number" id="salaryMax" min="0" max="10000" step="100" placeholder="최대" value="5000">
+                    <input type="number" id="salaryMax" min="0" max="100000" step="100" placeholder="최대(만원)" value="100000">
                 </div>
-                <small class="form-text" id="salaryHint">선택: 3000–5000만원</small>
+                <small class="form-text" id="salaryHint">선택: 3000–5000만원 (0–100000만원 = 0–10억원)</small>
             </div>
 
             <!-- 직업 조건 (카테고리 체크박스/다중선택) -->
@@ -123,9 +120,9 @@
                     <label class="any-toggle"><input type="checkbox" id="ageAny"> 상관없음</label>
                 </label>
                 <div class="range-row" id="ageControls">
-                    <input type="number" id="ageMin" name="ageMin" min="18" max="100" placeholder="최소" value="25">
+                    <input type="number" id="ageMin" name="ageMin" min="18" max="70" placeholder="최소" value="25">
                     <div id="ageSlider" class="nu-slider"></div>
-                    <input type="number" id="ageMax" name="ageMax" min="18" max="100" placeholder="최대" value="34">
+                    <input type="number" id="ageMax" name="ageMax" min="18" max="70" placeholder="최대" value="34">
                 </div>
                 <small class="form-text" id="ageHint">선택: 25–34세</small>
             </div>
@@ -146,9 +143,9 @@
                     <label class="any-toggle"><input type="checkbox" id="appearanceAny" checked> 상관없음</label>
                 </label>
                 <div class="range-row" id="appearanceControls">
-                    <input type="number" id="appearanceMin" min="0" max="100" step="1" value="0" disabled>
+                    <input type="number" id="appearanceMin" min="0" max="100" step="1" value="50" disabled>
                     <div id="appearanceSlider" class="nu-slider"></div>
-                    <input type="number" id="appearanceMax" min="1" max="100" step="1" value="20" disabled>
+                    <input type="number" id="appearanceMax" min="1" max="100" step="1" value="100" disabled>
                 </div>
                 <small class="form-text" id="appearanceHint">선택: 상관없음 (선택 시 상위 A–B% 구간을 의미)</small>
             </div>
@@ -225,11 +222,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // noUiSlider 로드 확인 후 초기화 재시도
     const startNoUi = () => {
         if (window.noUiSlider) {
-            initNoUiDual('height', 140, 200, 1, [165, 175], 'cm');
-            initNoUiDual('salary', 0, 10000, 100, [3000, 5000], '만원');
-            initNoUiDual('age', 18, 100, 1, [25, 34], '세');
+            initNoUiDual('height', 140, 200, 1, [170, 200], 'cm');
+            initNoUiDual('salary', 0, 100000, 100, [3000, 100000], '만원');
+            initNoUiDual('age', 18, 70, 1, [25, 34], '세');
+            // 학력: 0=전문대/고졸 이하, 1=4년제, 2=지거국, 3=인서울, 4=SKY (최소 학력 이상)
+            initNoUiSingle('education', 0, 4, 1, 1);
             // 외모: 조작은 부드럽게(1단위), 세밀 조정은 숫자 입력으로
-            initNoUiDual('appearance', 0, 100, 1, [0, 20], '%');
+            initNoUiDual('appearance', 0, 100, 1, [50, 100], '%');
         } else {
             setTimeout(startNoUi, 50);
         }
@@ -345,12 +344,12 @@ function updateSummary() {
         if (aMin && aMax) selectedConditions.push(`나이: ${aMin}–${aMax}세`);
     }
 
-    // 학력 다중 (상관없음 토글 무시하고 실제 선택 표시)
-    const eduLevelsSel = Array.from(document.querySelectorAll('input[name=education_levels]:checked')).map(el => el.value);
-    if (eduLevelsSel.length) {
-        selectedConditions.push(`학력(${eduLevelsSel.length}): ${eduLevelsSel.join(', ')}`);
-    } else {
+    // 학력 (슬라이더: 최소 학력 이상)
+    if (document.getElementById('educationAny').checked) {
         selectedConditions.push('학력: 상관없음');
+    } else {
+        const eduLabel = document.getElementById('educationLabel').value;
+        selectedConditions.push(`학력: ${eduLabel}`);
     }
 
     // 직업 다중
@@ -371,9 +370,14 @@ function updateSummary() {
         if (aMin && aMax) selectedConditions.push(`외모: 상위 ${aMin}–${aMax}%`);
     }
 
-    // 지역 다중 (실제 선택 표시)
-    const regs = Array.from(document.querySelectorAll('input[name=regions]:checked')).map(el => el.value);
-    if (regs.length) selectedConditions.push(`지역(${regs.length}): ${regs.join(', ')}`); else selectedConditions.push('지역: 상관없음');
+    // 지역 다중 (상관없음 토글 반영)
+    const regAny = document.getElementById('regionsAny').checked;
+    if (regAny) {
+        selectedConditions.push('지역: 상관없음');
+    } else {
+        const regs = Array.from(document.querySelectorAll('input[name=regions]:checked')).map(el => el.value);
+        if (regs.length) selectedConditions.push(`지역(${regs.length}): ${regs.join(', ')}`); else selectedConditions.push('지역: 상관없음');
+    }
     
     const summarySection = document.getElementById('summarySection');
     const selectedConditionsDiv = document.getElementById('selectedConditions');
@@ -410,12 +414,12 @@ async function handleFormSubmit(event) {
         filters.height_range = [hMin, hMax];
     }
 
-    // 연봉 범위
+    // 연봉 범위 (단위: 만원, 0–100000 = 0–10억원)
     if (!document.getElementById('salaryAny').checked) {
         const sMin = parseInt(document.getElementById('salaryMin').value);
         const sMax = parseInt(document.getElementById('salaryMax').value);
-        if (!Number.isInteger(sMin) || !Number.isInteger(sMax) || sMin < 0 || sMax > 10000 || sMin >= sMax) {
-            alert('올바른 연봉 범위를 입력해주세요 (0-10000만원, 최소 < 최대).');
+        if (!Number.isInteger(sMin) || !Number.isInteger(sMax) || sMin < 0 || sMax > 100000 || sMin >= sMax) {
+            alert('올바른 연봉 범위를 입력해주세요 (0–100000만원 = 0–10억원, 최소 < 최대).');
             return;
         }
         filters.salary_range = [sMin, sMax];
@@ -425,17 +429,21 @@ async function handleFormSubmit(event) {
     if (!document.getElementById('ageAny').checked) {
         const aMin = parseInt(document.getElementById('ageMin').value);
         const aMax = parseInt(document.getElementById('ageMax').value);
-        if (!Number.isInteger(aMin) || !Number.isInteger(aMax) || aMin < 18 || aMax > 100 || aMin >= aMax) {
-            alert('올바른 나이 범위를 입력해주세요 (18-100세, 최소 < 최대).');
+        if (!Number.isInteger(aMin) || !Number.isInteger(aMax) || aMin < 18 || aMax > 70 || aMin >= aMax) {
+            alert('올바른 나이 범위를 입력해주세요 (18-70세, 최소 < 최대).');
             return;
         }
         filters.age_range = [aMin, aMax];
     }
 
-    // 학력 다중
-    {
-        const levels = Array.from(document.querySelectorAll('input[name=education_levels]:checked')).map(el => el.value);
-        if (levels.length) filters.education_levels = levels;
+    // 학력 (선택 학력 이상만 포함)
+    if (!document.getElementById('educationAny').checked) {
+        const slider = document.getElementById('educationSlider');
+        const idx = Math.round(slider.noUiSlider.get());
+        const map = ['이하', '4년제', '지거국', '인서울', 'SKY'];
+        // 선택 학력 이상(상위 포함)만 전달
+        const levels = map.slice(idx);
+        filters.education_levels = levels;
     }
 
     // 직업 다중
@@ -460,8 +468,8 @@ async function handleFormSubmit(event) {
         filters.appearance_top_percent_range = [aMin, aMax];
     }
 
-    // 지역 다중
-    {
+    // 지역 다중 (상관없음이면 전송하지 않음)
+    if (!document.getElementById('regionsAny').checked) {
         const regs = Array.from(document.querySelectorAll('input[name=regions]:checked')).map(el => el.value);
         if (regs.length) filters.regions = regs;
     }
@@ -528,7 +536,19 @@ function initNoUiDual(prefix, min, max, step, start, unit) {
             if (prefix === 'appearance') {
                 hint.textContent = `선택: 상위 ${v0}–${v1}%`;
             } else {
-                hint.textContent = `선택: ${v0}–${v1}${unit}`;
+                // 연봉은 억/만원 혼합 표기: 예) 3000–50700만원 → 3,000만원–5억 700만원
+                if (prefix === 'salary') {
+                    const fmtMoney = (mw) => {
+                        const eok = Math.floor(mw / 10000);
+                        const man = mw % 10000;
+                        if (eok > 0 && man > 0) return `${eok.toLocaleString()}억 ${man.toLocaleString()}만원`;
+                        if (eok > 0) return `${eok.toLocaleString()}억원`;
+                        return `${man.toLocaleString()}만원`;
+                    };
+                    hint.textContent = `선택: ${fmtMoney(v0)} – ${fmtMoney(v1)}`;
+                } else {
+                    hint.textContent = `선택: ${v0}–${v1}${unit}`;
+                }
             }
         }
     });
@@ -559,6 +579,28 @@ function initNoUiDual(prefix, min, max, step, start, unit) {
     const onEnter = (e, el) => { if (e.key === 'Enter') { e.preventDefault(); applyFromInputs(); el.blur(); } };
     minNum.addEventListener('keydown', (e) => onEnter(e, minNum));
     maxNum.addEventListener('keydown', (e) => onEnter(e, maxNum));
+}
+
+// noUiSlider 단일 핸들 슬라이더 (학력 등)
+function initNoUiSingle(prefix, min, max, step, start) {
+    const slider = document.getElementById(prefix + 'Slider');
+    if (!slider || !window.noUiSlider) return;
+    noUiSlider.create(slider, {
+        start: [start],
+        connect: [true, false],
+        range: { min: min, max: max },
+        step: step,
+        behaviour: 'tap-drag'
+    });
+    const label = document.getElementById('educationLabel');
+    const hint = document.getElementById('educationHint');
+    const map = ['전문대/고졸 이하', '4년제', '지거국', '인서울', 'SKY'];
+    const toText = (idx) => idx <= 0 ? '전문대/고졸 이하 이상' : map[idx] + ' 이상';
+    slider.noUiSlider.on('update', (values) => {
+        const v = Math.round(values[0]);
+        if (label) label.value = toText(v);
+        if (hint) hint.textContent = `선택: ${toText(v)} (선택 학력 이상만 포함)`;
+    });
 }
 
 // 단일 슬라이더(외모 등)와 숫자 입력 동기화

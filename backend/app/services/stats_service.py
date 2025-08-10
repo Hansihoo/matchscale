@@ -16,6 +16,12 @@ class StatsService:
         self.correlation_factors = self._load_correlation_factors()
         # 최신 인구 데이터 (전국/시도 총인구 및 성별 인구)
         self.population_latest = self.statistics_data.get("population_latest", {})
+        # 연봉 상위 퍼센트 기준 테이블 (1억 이상 처리용)
+        self.income_percentiles = self.statistics_data.get("income_percentiles", [])
+        # 성별별 키 CDF 포인트 (남성 우선 적용)
+        self.male_height_cdf_points = self.statistics_data.get("male_height_cdf_points", [])
+        # (선택) 연령별 인구 분포
+        self.age_population = self.statistics_data.get("age_population", {})
     
     def _load_statistics_data(self) -> Dict:
         """
@@ -70,6 +76,15 @@ class StatsService:
             smoking_data = pd.read_csv(os.path.join(data_path, 'smokingRate.csv'))
             smoking_dist = self._process_smoking_data(smoking_data)
             
+            # 지역·연령별 혼인율(천명당) 데이터
+            try:
+                region_age_marry_csv = os.path.join(data_path, '지역_연령별_혼인율.csv')
+                region_age_marriage_rate = {}
+                if os.path.exists(region_age_marry_csv):
+                    region_age_marriage_rate = self._load_region_age_marriage_rate(region_age_marry_csv)
+            except Exception:
+                region_age_marriage_rate = {}
+            
             out = {
                 "height": height_dist,
                 "salary": salary_dist,
@@ -86,6 +101,41 @@ class StatsService:
                 }
             }
             out["population_latest"] = population_out
+            # 지역·연령별 혼인율 저장
+            try:
+                out["region_age_marriage_rate"] = region_age_marriage_rate
+            except Exception:
+                pass
+            # 연봉 상위 퍼센트 테이블 로드 (선택)
+            try:
+                pt_path = os.path.join(data_path, '연봉_구간.csv')
+                if os.path.exists(pt_path):
+                    out["income_percentiles"] = self._load_income_percentiles(pt_path)
+            except Exception as _:
+                pass
+            # 남성 키 CDF 포인트 로드 (선택)
+            try:
+                men_path = os.path.join(data_path, 'men_Percentile_Verification.csv')
+                if os.path.exists(men_path):
+                    out["male_height_cdf_points"] = self._load_male_height_cdf(men_path)
+            except Exception as _:
+                pass
+            # (선택) 연령별 인구 분포 로드: population_by_age_2025.csv (age, male, female)
+            try:
+                age_pop_path = os.path.join(data_path, 'population_by_age_2025.csv')
+                if os.path.exists(age_pop_path):
+                    out["age_population"] = self._load_age_population_by_csv(age_pop_path)
+            except Exception as _:
+                pass
+            # 보강: 남녀 분리 CSV로부터 연령 인구 구성
+            try:
+                if not out.get("age_population"):
+                    male_csv = os.path.join(data_path, 'male_population_by_age_korea.csv')
+                    female_csv = os.path.join(data_path, 'female_population_by_age_korea.csv')
+                    if os.path.exists(male_csv) and os.path.exists(female_csv):
+                        out["age_population"] = self._load_age_population_from_gender_csvs(male_csv, female_csv)
+            except Exception:
+                pass
             return out
             
         except Exception as e:
@@ -176,6 +226,67 @@ class StatsService:
         total_sum = sum(v for k, v in shares.items() if k not in ('수도권', '지방광역시', '기타'))
         # 반환
         return shares, population
+
+    def _load_income_percentiles(self, csv_path: str) -> List[Dict]:
+        """연봉 상위 퍼센트 테이블을 로드합니다.
+
+        Returns list of dicts: { 'top_percent': float, 'avg_total_manwon': float }
+        """
+        df = pd.read_csv(csv_path)
+        records: List[Dict] = []
+        for _, row in df.iterrows():
+            group = str(row.get('구분', '')).strip()
+            total = row.get('총급여', None)
+            if not group.startswith('상위'):
+                continue
+            # 구분에서 퍼센트 수치만 추출 (상위 10% → 10)
+            try:
+                p_str = group.replace('상위', '').replace('%', '').strip()
+                p_val = float(p_str)
+            except Exception:
+                continue
+            try:
+                total_val = float(total)
+            except Exception:
+                continue
+            # 총급여 단위가 천원이라 가정 → 만원으로 변환
+            avg_total_manwon = total_val * 0.1
+            records.append({'top_percent': p_val, 'avg_total_manwon': avg_total_manwon})
+        # 퍼센트 오름차순 정렬 (0.1, 0.2, ..., 100)
+        records.sort(key=lambda x: x['top_percent'])
+        return records
+
+    def _estimate_share_above_income(self, min_manwon: int) -> float:
+        """1억(=10000만원) 이상 구간에서, 평균 총급여 기반으로 상위 퍼센트 근사치를 추정합니다.
+
+        Approach: 찾고자 하는 임계값 이상이 되는 최소 top_percent를 선형 보간으로 추정. 반환은 비율(0~1).
+        데이터가 부족하면 0으로 반환.
+        """
+        table = self.income_percentiles or []
+        if not table:
+            return 0.0
+        # 평균 총급여는 top_percent가 커질수록 감소 경향. min_manwon에 가장 가까운 상위% 찾기
+        # 테이블 내에서 avg_total >= min_manwon 되는 최소 p를 탐색
+        prev = None
+        for rec in table:
+            p = rec['top_percent']
+            avg_mw = rec['avg_total_manwon']
+            if avg_mw >= min_manwon:
+                # 보간 (prev: 더 높은 p에서 평균이 더 낮음)
+                if prev is None:
+                    return max(0.0, min(1.0, p / 100.0))
+                p0, v0 = prev['top_percent'], prev['avg_total_manwon']
+                p1, v1 = p, avg_mw
+                if v0 == v1:
+                    est_p = p1
+                else:
+                    # v0 < min < v1, interpolate on value→percent
+                    ratio = (min_manwon - v0) / (v1 - v0)
+                    est_p = p0 + (p1 - p0) * ratio
+                return max(0.0, min(1.0, est_p / 100.0))
+            prev = rec
+        # 임계값이 너무 낮아 하위 데이터까지 내려간 경우: 전체 1.0
+        return 1.0
     
     def _process_height_data(self, height_data: pd.DataFrame, women_data: pd.DataFrame, men_data: pd.DataFrame) -> Dict:
         """키 분포 데이터를 처리합니다."""
@@ -207,6 +318,62 @@ class StatsService:
             height_dist = self._get_fallback_data()["height"]
 
         return height_dist
+
+    def _load_male_height_cdf(self, csv_path: str) -> List[Dict]:
+        """남성 키에 대한 CDF 포인트를 로드합니다.
+        Returns: [{ 'height': float, 'cdf': float }, ...]
+        """
+        df = pd.read_csv(csv_path)
+        points: List[Dict] = []
+        for _, row in df.iterrows():
+            try:
+                h = float(row['Actual Height (cm)'])
+                cdf = float(row['Expected CDF (%)'])
+            except Exception:
+                continue
+            points.append({'height': h, 'cdf': cdf / 100.0})
+        points.sort(key=lambda x: x['height'])
+        return points
+
+    def _estimate_male_cdf_above(self, cm: float) -> Optional[float]:
+        """남성 키가 cm 이상일 비율(> = cm)을 선형 보간으로 추정합니다."""
+        pts = self.male_height_cdf_points
+        if not pts:
+            return None
+        # CDF는 P(<=h). 우리가 필요한 건 P(>=cm) = 1 - P(<cm)
+        # 선형 보간으로 CDF(cm) 추정
+        prev = None
+        # 하단 외삽: cm가 가장 작은 포인트보다 작으면 첫 두 점으로 외삽
+        if cm <= pts[0]['height'] and len(pts) >= 2:
+            h0, c0 = pts[0]['height'], pts[0]['cdf']
+            h1, c1 = pts[1]['height'], pts[1]['cdf']
+            slope = (c1 - c0) / (h1 - h0) if h1 != h0 else 0.0
+            cdf_cm = c0 + slope * (cm - h0)
+            cdf_cm = max(0.0, min(1.0, cdf_cm))
+            return max(0.0, min(1.0, 1.0 - cdf_cm))
+        for p in pts:
+            if p['height'] >= cm:
+                if prev is None:
+                    cdf_cm = p['cdf']
+                else:
+                    h0, c0 = prev['height'], prev['cdf']
+                    h1, c1 = p['height'], p['cdf']
+                    if h1 == h0:
+                        cdf_cm = c1
+                    else:
+                        t = (cm - h0) / (h1 - h0)
+                        cdf_cm = c0 + (c1 - c0) * t
+                return max(0.0, min(1.0, 1.0 - cdf_cm))
+            prev = p
+        # 상단 외삽: cm가 가장 큰 포인트보다 크면 마지막 두 점의 기울기로 외삽
+        if len(pts) >= 2:
+            h0, c0 = pts[-2]['height'], pts[-2]['cdf']
+            h1, c1 = pts[-1]['height'], pts[-1]['cdf']
+            slope = (c1 - c0) / (h1 - h0) if h1 != h0 else 0.0
+            cdf_cm = c1 + slope * (cm - h1)
+            cdf_cm = max(0.0, min(1.0, cdf_cm))
+            return max(0.0, min(1.0, 1.0 - cdf_cm))
+        return 0.0
     
     def _process_income_data(self, income_data: pd.DataFrame) -> Dict:
         """소득 분포 데이터를 처리합니다."""
@@ -233,6 +400,277 @@ class StatsService:
                 salary_dist['5000만원 이상'] = salary_dist.get('5000만원 이상', 0) + total_percentage
         
         return salary_dist
+
+    def _load_age_population_by_csv(self, csv_path: str) -> Dict[int, Dict[str, float]]:
+        """연령별 인구 분포를 로드합니다.
+
+        CSV 형식 예:
+            age,male,female
+            0,120000,110000
+            1,119000,108000
+            ...
+        대소문자/한글 헤더도 일부 허용합니다.
+        Returns: { age_int: {"남성": float, "여성": float} }
+        """
+        df = pd.read_csv(csv_path)
+        cols = {c.lower().strip(): c for c in df.columns}
+        # 헤더 후보 매핑
+        age_col = cols.get('age') or cols.get('연령') or list(df.columns)[0]
+        male_col = cols.get('male') or cols.get('남성') or cols.get('남자')
+        female_col = cols.get('female') or cols.get('여성') or cols.get('여자')
+        if male_col is None or female_col is None:
+            # 남/여 중 하나라도 없으면 사용하지 않음
+            return {}
+        out: Dict[int, Dict[str, float]] = {}
+        for _, row in df.iterrows():
+            try:
+                age = int(row[age_col])
+            except Exception:
+                continue
+            try:
+                m = float(row[male_col])
+            except Exception:
+                m = 0.0
+            try:
+                f = float(row[female_col])
+            except Exception:
+                f = 0.0
+            out[age] = {"남성": m, "여성": f}
+        return out
+
+    def _load_age_population_from_gender_csvs(self, male_csv_path: str, female_csv_path: str) -> Dict[int, Dict[str, float]]:
+        """남녀 분리된 한국 연령 인구 CSV들을 병합해 연령별 인구 분포를 생성합니다.
+
+        각 CSV 형식 예:
+            연령별,인구,비율
+            0세,"111,163",0.4303%
+            ...
+            총,"25,836,801",100.0000%
+
+        Returns:
+            Dict[int, Dict[str, float]]: { age: {"남성": float, "여성": float} }
+        """
+        def parse(path: str) -> Dict[int, float]:
+            df = pd.read_csv(path)
+            # 컬럼 추론
+            col_age = df.columns[0]
+            col_pop = df.columns[1] if df.shape[1] > 1 else df.columns[0]
+            result: Dict[int, float] = {}
+            for _, row in df.iterrows():
+                age_raw = str(row.get(col_age, '')).strip()
+                if not age_raw or '총' in age_raw:
+                    continue
+                try:
+                    age_val = int(str(age_raw).replace('세', '').strip())
+                except Exception:
+                    continue
+                pop_raw = row.get(col_pop, 0)
+                try:
+                    if isinstance(pop_raw, str):
+                        pop_val = float(pop_raw.replace(',', '').replace('"', '').strip())
+                    else:
+                        pop_val = float(pop_raw)
+                except Exception:
+                    pop_val = 0.0
+                result[age_val] = max(0.0, pop_val)
+            return result
+
+        male = parse(male_csv_path)
+        female = parse(female_csv_path)
+        ages = set(male.keys()) | set(female.keys())
+        merged: Dict[int, Dict[str, float]] = {}
+        for a in ages:
+            merged[a] = {"남성": float(male.get(a, 0.0)), "여성": float(female.get(a, 0.0))}
+        return merged
+
+    def _get_unmarried_band_key(self, age: int) -> Optional[str]:
+        """unmarried_rate_by_age 매핑에서 사용할 연령대 키를 반환합니다."""
+        if age < 20:
+            return None
+        if age < 25:
+            return "20-24"
+        if age < 30:
+            return "25-29"
+        if age < 35:
+            return "30-34"
+        if age < 40:
+            return "35-39"
+        if age < 45:
+            return "40-44"
+        if age < 50:
+            return "45-49"
+        return "45-49"
+
+    def _compute_population_weighted_unmarried_rate(self, gender: str, age_low: int, age_high: int) -> Tuple[Optional[float], float, float]:
+        """단일 나이별 인구와 연령대별 미혼률을 이용해 인구가중 미혼률을 계산합니다.
+
+        Returns:
+            (rate, sum_unmarried_count, sum_pop_selected)
+        """
+        ms_map = self.statistics_data.get("marital_status", {})
+        if not isinstance(self.age_population, dict) or not self.age_population:
+            return None, 0.0, 0.0
+        sum_pop = 0.0
+        sum_unmarried = 0.0
+        for a in range(age_low, age_high + 1):
+            rec = self.age_population.get(a)
+            if not rec or gender not in rec:
+                continue
+            pop_a = float(rec[gender])
+            key = self._get_unmarried_band_key(a)
+            if key is None:
+                continue
+            # _process_marital_data 키 보정: '20-24'는 내부에서 '20대'로 저장됐을 수 있음
+            rate_entry = ms_map.get(key)
+            if rate_entry is None and key == "20-24":
+                rate_entry = ms_map.get("20대")
+            rate = None
+            if rate_entry is not None:
+                r = rate_entry.get(gender)
+                if isinstance(r, (int, float)):
+                    rate = float(r)
+            if rate is None:
+                continue
+            sum_pop += pop_a
+            sum_unmarried += pop_a * rate
+        if sum_pop > 0:
+            return max(0.0, min(1.0, sum_unmarried / sum_pop)), sum_unmarried, sum_pop
+        return None, 0.0, 0.0
+
+    def _load_region_age_marriage_rate(self, csv_path: str) -> Dict[str, Dict[str, Dict[str, float]]]:
+        """지역·연령대별 혼인율(해당 연령 천명당 건수)을 로드합니다.
+
+        CSV 형식:
+            "시도별","연령별",남편(해당연령 천명당 건),아내(해당연령 천명당 건)
+            "계","20 - 24세",2.6,7.4
+            ...
+
+        Returns:
+            Dict[str, Dict[str, Dict[str, float]]]: region -> age_band -> {"남성": rate, "여성": rate}
+            rate는 1명 기준 확률(천분율을 1000으로 나눔)
+        """
+        df = pd.read_csv(csv_path)
+        # 헤더 행이 2행으로 중복 포함된 경우를 대비, 첫 번째 의미 행을 찾음
+        # 일반적으로 2행 구조: 0행 컬럼명 텍스트, 1행 실제 헤더. 여기서는 이미 컬럼명이 잡혀있다고 가정
+        col_region = df.columns[0]
+        col_age = df.columns[1]
+        col_male = df.columns[2]
+        col_female = df.columns[3]
+        out: Dict[str, Dict[str, Dict[str, float]]] = {}
+        for _, row in df.iterrows():
+            region = str(row.get(col_region, '')).strip().strip('"')
+            age_band = str(row.get(col_age, '')).strip().strip('"')
+            if not region or not age_band or region == '시도별' or age_band == '연령별':
+                continue
+            try:
+                male_rate = float(row.get(col_male, 0.0)) / 1000.0
+            except Exception:
+                male_rate = 0.0
+            try:
+                female_rate = float(row.get(col_female, 0.0)) / 1000.0
+            except Exception:
+                female_rate = 0.0
+            out.setdefault(region, {})[age_band] = {"남성": max(0.0, male_rate), "여성": max(0.0, female_rate)}
+        return out
+
+    def _estimate_marital_factor(self, gender: str, age_low: int, age_high: int, selected_regions: Optional[List[str]]) -> Tuple[Optional[float], Optional[str]]:
+        """선택 성별/연령(범위)과 지역 선택에 따른 '미혼률' 팩터를 계산합니다.
+
+        기본:
+        - `unmarried_rate_by_age.csv`의 미혼율(연령대별)을 겹침 연수로 가중 평균해 사용
+
+        지역 보정(선택 사항):
+        - `지역_연령별_혼인율.csv`의 혼인율(천명당)을 전국 대비 지수로 환산하여
+          미혼률을 미세 보정(발생률이 높을수록 미혼률을 소폭 감소)
+        """
+        # 1) 기본 미혼률: 연령대별 미혼률(전국) 가중 평균
+        bands_unmarried = [
+            (20, 24, "20-24"),
+            (25, 29, "25-29"),
+            (30, 34, "30-34"),
+            (35, 39, "35-39"),
+            (40, 44, "40-44"),
+            (45, 49, "45-49"),
+        ]
+        ms_map = self.statistics_data.get("marital_status", {})
+        total_years = max(1, age_high - age_low + 1)
+        base_unmarried = None
+        acc = 0.0
+        for lo, hi, key in bands_unmarried:
+            overlap = max(0, min(hi, age_high) - max(lo, age_low) + 1)
+            if overlap <= 0:
+                continue
+            rate = ms_map.get(key, {}).get(gender)
+            if isinstance(rate, (int, float)):
+                acc += (overlap / total_years) * float(rate)
+        if acc > 0:
+            base_unmarried = max(0.0, min(1.0, acc))
+        else:
+            # 데이터 범위를 벗어난 경우(예: 50세 이상만 선택): 가장 가까운 구간으로 근사
+            # 상한을 45-49로 고정 근사
+            rate = ms_map.get("45-49", {}).get(gender)
+            if isinstance(rate, (int, float)):
+                base_unmarried = max(0.0, min(1.0, float(rate)))
+            else:
+                return None, None
+
+        # 2) 지역 보정: 혼인율(천명당) 지수를 사용해 미세 조정
+        region_age = self.statistics_data.get("region_age_marriage_rate") or {}
+        if region_age:
+            bands_marry = [
+                (20, 24, "20 - 24세"),
+                (25, 29, "25 - 29세"),
+                (30, 34, "30 - 34세"),
+                (35, 39, "35 - 39세"),
+                (40, 44, "40 - 44세"),
+                (45, 49, "45 - 49세"),
+            ]
+
+            def marry_rate_for(region_key: str) -> float:
+                reg_map = region_age.get(region_key) or {}
+                acc_r = 0.0
+                for lo, hi, label in bands_marry:
+                    overlap = max(0, min(hi, age_high) - max(lo, age_low) + 1)
+                    if overlap <= 0:
+                        continue
+                    rec = reg_map.get(label)
+                    if rec and gender in rec:
+                        acc_r += (overlap / total_years) * float(rec[gender])
+                return max(0.0, acc_r)
+
+            nat_key = "계" if "계" in region_age else next(iter(region_age.keys()))
+            nat_rate = marry_rate_for(nat_key) or 1e-9
+
+            if selected_regions:
+                # 선택 지역 가중 평균 혼인율
+                pop = self.population_latest or {}
+                region_pops = pop.get("regions", {})
+                weights: List[Tuple[float, str]] = []
+                for r in selected_regions:
+                    if r in region_age:
+                        w = float(region_pops.get(r, {}).get(gender) or 0.0)
+                        if w > 0:
+                            weights.append((w, r))
+                if weights:
+                    total_w = sum(w for w, _ in weights)
+                    reg_rate = 0.0
+                    for w, r in weights:
+                        reg_rate += (w / total_w) * marry_rate_for(r)
+                else:
+                    reg_rate = nat_rate
+                label = f"선택 지역 가중 {age_low}-{age_high}세 {gender}"
+            else:
+                reg_rate = nat_rate
+                label = f"전국 합계 {age_low}-{age_high}세 {gender}"
+
+            # 혼인율 지수(>1 → 결혼 활성 → 미혼률 소폭 감소)
+            index = reg_rate / nat_rate
+            alpha = 0.25  # 보정 강도 (0~1)
+            adjusted = base_unmarried * max(0.0, (1.0 - alpha * (index - 1.0)))
+            return max(0.0, min(1.0, adjusted)), label
+
+        # 지역 데이터 없으면 기본값 반환
+        return base_unmarried, f"전국 합계 {age_low}-{age_high}세 {gender}"
     
     def _process_occupation_data(self, occupation_data: pd.DataFrame) -> Dict:
         """직업 분포 데이터를 처리합니다."""
@@ -658,6 +1096,10 @@ class StatsService:
             probabilities = []
             applied_conditions = []
             condition_details = []
+            # 미혼율은 마지막 곱으로 적용
+            marital_factor: Optional[float] = None
+            marital_detail_label: Optional[str] = None
+            marital_detail_type: Optional[str] = None
             
             # 성별은 필수이므로 항상 포함
             if "gender" in filters:
@@ -729,7 +1171,25 @@ class StatsService:
                 except Exception:
                     s_min, s_max = None, None
                 if s_min is not None and s_max is not None and s_min < s_max:
-                    salary_prob = self._aggregate_salary_probability(s_min, s_max)
+                    # 1억(10000만원) 경계 고려: 
+                    # - 전구간이 1억 이상: P = P(>=s_min) - P(>=s_max)
+                    # - 경계 교차: P = P([s_min,10000)) + (P(>=10000) - P(>=s_max))
+                    # - 전구간이 1억 미만: 기존 분포 합산
+                    if s_min >= 10000 and s_max > 10000:
+                        p_min = self._estimate_share_above_income(s_min)
+                        p_max = self._estimate_share_above_income(s_max)
+                        salary_prob = max(0.0, min(1.0, p_min - p_max))
+                        detail_text = "상위 퍼센트 테이블 기반(범위)"
+                    elif s_min < 10000 and s_max > 10000:
+                        below_prob = self._aggregate_salary_probability(s_min, 10000)
+                        p_10000 = self._estimate_share_above_income(10000)
+                        p_max = self._estimate_share_above_income(s_max)
+                        above_prob = max(0.0, p_10000 - p_max)
+                        salary_prob = max(0.0, min(1.0, below_prob + above_prob))
+                        detail_text = "분포 합산+상위 퍼센트 혼합"
+                    else:
+                        salary_prob = self._aggregate_salary_probability(s_min, s_max)
+                        detail_text = "분포 범위 합산"
                     probabilities.append(salary_prob)
                     applied_conditions.append("연봉")
                     condition_details.append({
@@ -737,7 +1197,7 @@ class StatsService:
                         "value": f"{s_min}-{s_max}만원",
                         "probability": salary_prob,
                         "data_source": "소득 분포 통계",
-                        "detail": "범위 합산"
+                        "detail": detail_text
                     })
             elif "salary" in filters and filters["salary"]:
                 salary_prob = self.statistics_data["salary"].get(filters["salary"], 0.01)
@@ -802,7 +1262,8 @@ class StatsService:
                     "data_source": "인구 분포 통계"
                 })
             
-            # 나이 조건 처리 (범위 또는 단일값) - 성별별 미혼율 적용
+            # 나이 조건 처리 (범위 또는 단일값)
+            # 정책: 나이는 '연령 인구 비중'을 확률로 사용하고, 미혼율은 마지막 단계에서 적용
             if "age_range" in filters and filters["age_range"]:
                 gender = filters.get("gender", "남성")
                 try:
@@ -812,68 +1273,118 @@ class StatsService:
                 except Exception:
                     age_min, age_max = None, None
                 if age_min is not None and age_max is not None and age_min < age_max:
-                    # 범위 내 각 나이에 대해 대응 나이대 미혼율을 평균
-                    age_keys = []
-                    for a in range(max(18, age_min), min(100, age_max) + 1):
-                        if a < 25:
-                            age_keys.append("20대")
-                        elif a < 30:
-                            age_keys.append("25-29")
-                        elif a < 35:
-                            age_keys.append("30-34")
-                        elif a < 40:
-                            age_keys.append("35-39")
-                        elif a < 45:
-                            age_keys.append("40-44")
-                        elif a < 50:
-                            age_keys.append("45-49")
-                        else:
-                            age_keys.append("45-49")
-                    probs = []
-                    for key in age_keys:
-                        if key in self.statistics_data["marital_status"]:
-                            probs.append(self.statistics_data["marital_status"][key][gender])
-                    if probs:
-                        marital_prob = sum(probs) / len(probs)
-                        probabilities.append(marital_prob)
+                    # 선택 구간은 입력값 기준으로 자르고, 분모는 전체 연령 합계(데이터 전 연령)로 계산
+                    sel_low = age_min
+                    sel_high = age_max
+                    if sel_low <= sel_high:
+                        used_real_population = False
+                        age_share_prob = None
+                        # 실제 연령별 인구 분포가 있으면 그것을 사용
+                        if isinstance(self.age_population, dict) and self.age_population:
+                            # 분모: 데이터 내 전체 연령(선택 성별)
+                            denom = 0.0
+                            num = 0.0
+                            for a, rec in self.age_population.items():
+                                try:
+                                    a_int = int(a)
+                                except Exception:
+                                    continue
+                                if rec and gender in rec:
+                                    denom += float(rec[gender])
+                            for a in range(sel_low, sel_high + 1):
+                                rec = self.age_population.get(a)
+                                if rec and gender in rec:
+                                    num += float(rec[gender])
+                            if denom > 0:
+                                age_share_prob = max(0.0, min(1.0, num / denom))
+                                used_real_population = True
+                        # 없거나 계산 불가하면 균등 가정
+                        if age_share_prob is None:
+                            years = (sel_high - sel_low + 1)
+                            # 분모는 데이터 전체를 모를 때 대략 0-99로 가정(100년)
+                            total_years = 100
+                            age_share_prob = max(0.0, min(1.0, years / total_years))
+                        probabilities.append(age_share_prob)
                         applied_conditions.append("나이")
                         condition_details.append({
                             "condition": "나이",
                             "value": f"{age_min}-{age_max}세",
-                            "probability": marital_prob,
-                            "data_source": "연령별 미혼율 통계",
-                            "detail": f"범위 평균 {gender} 미혼율"
+                            "probability": age_share_prob,
+                            "data_source": "연령 인구 비중(실제)" if used_real_population else "연령 범위 비중(가정: 18-70 균등)",
+                            "detail": (
+                                f"선택 연령 인구/성인 인구 (실데이터)" if used_real_population else f"전체 18-70 대비 연령 구간 길이 비율"
+                            )
                         })
+                        # 미혼율 팩터(마지막 단계) 계산: 지역 선택에 따라 가중 평균
+                        try:
+                            # 인구가중 미혼률(정확) 계산: 단일 나이별 인구 × 미혼률 합 / 선택 연령 인구 합
+                            rate, sum_unmarried, sum_pop_sel = self._compute_population_weighted_unmarried_rate(gender, sel_low, sel_high)
+                            if isinstance(rate, (int, float)):
+                                marital_factor = rate
+                                marital_detail_label = ""
+                                marital_detail_type = "인구가중 미혼률"
+                        except Exception:
+                            pass
             elif "age" in filters and filters["age"]:
                 age = int(filters["age"])
                 gender = filters.get("gender", "남성")
                 if age < 25:
-                    age_key = "20대"
+                    band = (20, 24)
                 elif age < 30:
-                    age_key = "25-29"
+                    band = (25, 29)
                 elif age < 35:
-                    age_key = "30-34"
+                    band = (30, 34)
                 elif age < 40:
-                    age_key = "35-39"
+                    band = (35, 39)
                 elif age < 45:
-                    age_key = "40-44"
+                    band = (40, 44)
                 elif age < 50:
-                    age_key = "45-49"
+                    band = (45, 49)
                 else:
-                    age_key = "45-49"
-                if age_key in self.statistics_data["marital_status"]:
-                    marital_prob = self.statistics_data["marital_status"][age_key][gender]
-                else:
-                    marital_prob = 0.5
-                probabilities.append(marital_prob)
+                    band = (45, 49)
+                # 연령대 인구 비중
+                used_real_population = False
+                age_share_prob = None
+                if isinstance(self.age_population, dict) and self.age_population:
+                    denom = 0.0
+                    num = 0.0
+                    for a, rec in self.age_population.items():
+                        try:
+                            a_int = int(a)
+                        except Exception:
+                            continue
+                        if rec and gender in rec:
+                            denom += float(rec[gender])
+                    for a in range(band[0], band[1] + 1):
+                        rec = self.age_population.get(a)
+                        if rec and gender in rec:
+                            num += float(rec[gender])
+                    if denom > 0:
+                        age_share_prob = max(0.0, min(1.0, num / denom))
+                        used_real_population = True
+                if age_share_prob is None:
+                    # 분모는 데이터 전체를 모를 때 대략 0-99로 가정(100년)
+                    total_years = 100
+                    years = (band[1] - band[0] + 1)
+                    age_share_prob = max(0.0, min(1.0, years / total_years))
+                probabilities.append(age_share_prob)
                 applied_conditions.append("나이")
                 condition_details.append({
                     "condition": "나이",
-                    "value": f"{age}세",
-                    "probability": marital_prob,
-                    "data_source": "연령별 미혼율 통계",
-                    "detail": f"{age_key} {gender} 미혼율"
+                    "value": f"{band[0]}-{band[1]}세",
+                    "probability": age_share_prob,
+                    "data_source": "연령 인구 비중(실제)" if used_real_population else "연령 범위 비중(가정: 18-70 균등)",
+                    "detail": f"{band[0]}-{band[1]}세 인구 비중"
                 })
+                # 미혼율 팩터(마지막 단계)
+                try:
+                    rate, sum_unmarried, sum_pop_sel = self._compute_population_weighted_unmarried_rate(gender, band[0], band[1])
+                    if isinstance(rate, (int, float)):
+                        marital_factor = rate
+                        marital_detail_label = ""
+                        marital_detail_type = "인구가중 미혼률"
+                except Exception:
+                    pass
             
             # 흡연 여부 조건 처리 (체크박스)
             if "smoking" in filters and filters["smoking"] == "비흡연":
@@ -935,6 +1446,17 @@ class StatsService:
             else:
                 adjusted_probabilities = probabilities
             
+            # 미혼율은 마지막에 적용
+            if marital_factor is not None:
+                adjusted_probabilities = list(adjusted_probabilities) + [marital_factor]
+                condition_details.append({
+                    "condition": "미혼률",
+                    "value": "",
+                    "probability": marital_factor,
+                    "data_source": "연령대별 미혼률(인구가중)",
+                    "detail": marital_detail_type or "최종 단계 적용"
+                })
+
             # 최종 선택률 계산 (조정된 곱셈 원리)
             if adjusted_probabilities:
                 final_probability = 1.0
@@ -942,8 +1464,8 @@ class StatsService:
                     final_probability *= prob
                 final_probability *= 100  # 퍼센트로 변환
             else:
-                # 조건이 없으면 기본값 (성별만 선택한 경우)
-                final_probability = 50.0
+                # 조건이 없으면 (성별만 선택한 경우) 전체 이성 대비 100%
+                final_probability = 100.0
             
             # 선택률 등급 판정
             selection_level = self._get_selection_level(final_probability)
@@ -1038,7 +1560,10 @@ class StatsService:
             detail = cond.get("detail")
             # 가독성 친화 레이블 보정
             if label == "나이":
-                pretty = f"미혼율 (연령대)"
+                pretty = "연령 구간 비중"
+            elif label == "미혼률":
+                region_text = "(지역 선택 가중)" if isinstance(filters.get("regions"), list) and filters.get("regions") else "(전국 합계 기준)"
+                pretty = f"미혼률 {region_text}"
             elif label == "흡연 여부" and value == "비흡연":
                 pretty = "비흡연 비율"
             else:
@@ -1062,17 +1587,36 @@ class StatsService:
     def _aggregate_height_probability(self, cm_min: int, cm_max: int) -> float:
         """키 범위에 해당하는 구간 확률을 합산합니다."""
         total = 0.0
-        for key, prob in self.statistics_data.get("height", {}).items():
+        bins = self.statistics_data.get("height", {})
+        # 1) 데이터에 있는 구간 합산 (대략적)
+        for key, prob in bins.items():
             try:
                 a, b = key.split("-")
                 a = int(a)
                 b = int(b)
             except Exception:
                 continue
-            # 구간이 겹치면 합산 (대략적 합산)
             if not (b <= cm_min or a >= cm_max):
                 total += prob
-        return min(1.0, total)
+
+        # 2) 상단 꼬리(>=185cm)는 남성 CDF 포인트로 보강
+        coverage_max = 185
+        if self.male_height_cdf_points:
+            # 케이스 A: 범위 전부가 185 이상인 경우 → 순수 꼬리 차이
+            if cm_min >= coverage_max:
+                p_lower = self._estimate_male_cdf_above(cm_min)
+                p_upper = self._estimate_male_cdf_above(cm_max)
+                tail = max(0.0, (p_lower or 0.0) - (p_upper or 0.0))
+                total = tail
+            # 케이스 B: 일부만 185 이상이면, 그 부분만 꼬리로 보강
+            elif cm_max > coverage_max:
+                lower = max(cm_min, coverage_max)
+                p_lower = self._estimate_male_cdf_above(lower)
+                p_upper = self._estimate_male_cdf_above(cm_max)
+                tail = max(0.0, (p_lower or 0.0) - (p_upper or 0.0))
+                total += tail
+
+        return min(1.0, max(0.0, total))
 
     def _aggregate_salary_probability(self, amount_min: int, amount_max: int) -> float:
         """연봉 범위(만원)에 해당하는 분포 확률을 합산합니다."""
@@ -1093,7 +1637,14 @@ class StatsService:
                 except Exception:
                     continue
                 if amount_max >= lower:
-                    total += prob
+                    # 5000만원 이상 구간이 상단 꼬리를 포함하므로, 1억원 경계에서 분할
+                    if lower == 5000 and amount_max <= 10000:
+                        # [5000, 1억)만 포함하도록 조정: prob_minus_tail = prob - P(>=1억)
+                        p_tail = self._estimate_share_above_income(10000)
+                        contrib = max(0.0, prob - p_tail)
+                        total += contrib
+                    else:
+                        total += prob
             elif '-' in key:
                 try:
                     lower, upper = key.replace('만원', '').split('-')
